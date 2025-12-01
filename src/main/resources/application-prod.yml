@@ -1,0 +1,3 @@
+#Production Environment Configurations
+server:
+  port: 8080

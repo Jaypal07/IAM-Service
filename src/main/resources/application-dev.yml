@@ -1,0 +1,26 @@
+#Development Environment Configurations
+server:
+  port: 8081
+
+#Database Connection
+spring:
+  datasource:
+    url: "jdbc:postgresql://localhost:5432/Auth-App"
+    username: postgres
+    password: 1234
+#    hikari:
+#      pool-name: HikariCP
+#      maximum-pool-size: 5
+#      connection-timeout: 10000
+#      idle-timeout: 600000
+#      max-lifetime: 1800000
+#      validation-timeout: 1800000
+#      leak-detection-threshold: 0
+#      initialization-fail-timeout: -1
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        show_sql: true
