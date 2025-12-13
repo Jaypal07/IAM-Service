@@ -108,6 +108,7 @@ public class AuthController {
 
     // ---------------- REFRESH ----------------
 
+    @Transactional
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponse> refreshToken(
             @RequestBody(required = false) RefreshTokenRequest body,
