@@ -1,68 +1,88 @@
 package com.jaypal.authapp.entities;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-@Builder
 @Entity
 @Table(name = "users")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class User implements UserDetails {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "user_id")
+    @GeneratedValue(generator = "UUID")
+    @Column(name = "user_id", updatable = false, nullable = false)
     private UUID id;
+
     @Column(unique = true, nullable = false)
     private String email;
+
+    @Column(nullable = false)
     private String password;
+
     @Column(nullable = false)
     private String name;
+
     private String image;
-    private boolean enabled=true;
-    private Instant createdAt =  Instant.now();
-    private Instant updatedAt =  Instant.now();
+
+    @Column(nullable = false)
+    private boolean enabled = true;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Provider provider = Provider.LOCAL;
 
     @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(name = "user_roles",
+    @JoinTable(
+            name = "user_roles",
             joinColumns = @JoinColumn(name = "user_id"),
-    inverseJoinColumns = @JoinColumn(name = "role_id"))
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    @Builder.Default
     private Set<Role> roles = new HashSet<>();
 
     @PrePersist
-    public void onCreate(){
+    protected void onCreate() {
         Instant now = Instant.now();
-        if(this.createdAt == null){
-            this.createdAt = now;
-        }
-        updatedAt = now;
+        if (this.createdAt == null) this.createdAt = now;
+        this.updatedAt = now;
+        if (this.id == null) this.id = UUID.randomUUID();
     }
 
     @PreUpdate
-    public void onUpdate(){
-        updatedAt = Instant.now();
+    protected void onUpdate() {
+        this.updatedAt = Instant.now();
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return  roles
-                .stream()
-                .map(role -> new SimpleGrantedAuthority(role.getName()))
-                .toList();
+        if (roles == null || roles.isEmpty()) return Collections.emptySet();
+        return roles.stream()
+                .map(Role::getName)
+                .filter(Objects::nonNull)
+                .map(this::toAuthority)
+                .collect(Collectors.toSet());
+    }
+
+    private SimpleGrantedAuthority toAuthority(String roleName) {
+        String normalized = roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+        return new SimpleGrantedAuthority(normalized);
     }
 
     @Override
@@ -82,6 +102,12 @@ public class User implements UserDetails {
 
     @Override
     public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
         return this.enabled;
     }
+
 }
