@@ -50,7 +50,7 @@ public class AuthController {
 
     // ---------------- REGISTER ----------------
 
-    @PostMapping
+    @PostMapping("/register")
     public ResponseEntity<UserDto> registerUser(@RequestBody UserDto userDto) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)

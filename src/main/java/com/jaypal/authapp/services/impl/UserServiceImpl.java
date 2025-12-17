@@ -35,6 +35,7 @@ public class UserServiceImpl implements UserService {
 
         User user = modelMapper.map(userDto, User.class);
         user.setProvider(userDto.getProvider() != null ? userDto.getProvider() : Provider.LOCAL);
+//        user.setProviderId(UserHelper.parseUUID(user.getId()));
         //TODO:  assign new role to user
 
         User savedUser = userRepository.save(user);
