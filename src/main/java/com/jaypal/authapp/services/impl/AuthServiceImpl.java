@@ -1,6 +1,6 @@
 package com.jaypal.authapp.services.impl;
 
-import com.jaypal.authapp.dtos.UserDto;
+import com.jaypal.authapp.dto.UserDto;
 import com.jaypal.authapp.services.AuthService;
 import com.jaypal.authapp.services.UserService;
 import lombok.AllArgsConstructor;

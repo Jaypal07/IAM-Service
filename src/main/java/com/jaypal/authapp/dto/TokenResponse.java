@@ -1,4 +1,4 @@
-package com.jaypal.authapp.dtos;
+package com.jaypal.authapp.dto;
 
 
 public record TokenResponse(

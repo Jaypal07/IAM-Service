@@ -1,7 +1,7 @@
 package com.jaypal.authapp.security;
 
-import com.jaypal.authapp.exceptions.ResourceNotFoundExceptions;
-import com.jaypal.authapp.repositories.UserRepository;
+import com.jaypal.authapp.exception.ResourceNotFoundExceptions;
+import com.jaypal.authapp.repository.UserRepository;
 import lombok.AllArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

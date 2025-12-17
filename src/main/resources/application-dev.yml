@@ -19,7 +19,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:update}
+      ddl-auto: ${JPA_DDL_AUTO:create-drop }
     open-in-view: false
     properties:
       hibernate:
@@ -36,14 +36,15 @@ spring:
               - openid
               - profile
               - email
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+#            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
 
           github:
             client-id: ${GITHUB_CLIENT_ID}
             client-secret: ${GITHUB_CLIENT_SECRET}
             scope:
               - user:email
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+              - read:user
+#            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
 
         provider:
           google:

@@ -1,7 +1,7 @@
 package com.jaypal.authapp.security;
 
-import com.jaypal.authapp.entities.Role;
-import com.jaypal.authapp.entities.User;
+import com.jaypal.authapp.entity.Role;
+import com.jaypal.authapp.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import lombok.Getter;
@@ -45,11 +45,15 @@ public class JwtService {
     // -------------------------------------------------------------------------
 
     public String generateAccessToken(User user) {
-        Map<String, Object> claims = Map.of(
-                CLAIM_EMAIL, user.getEmail(),
-                CLAIM_ROLES, extractRoleNames(user),
-                CLAIM_TYPE, TYPE_ACCESS
-        );
+
+        Map<String, Object> claims = new HashMap<>();
+
+        claims.put(CLAIM_TYPE, TYPE_ACCESS);
+        claims.put(CLAIM_ROLES, extractRoleNames(user));
+
+        if (user.getEmail() != null) {
+            claims.put(CLAIM_EMAIL, user.getEmail());
+        }
 
         return JwtUtils.buildToken(
                 secretKey,
@@ -61,9 +65,9 @@ public class JwtService {
     }
 
     public String generateRefreshToken(User user, String jti) {
-        Map<String, Object> claims = Map.of(
-                CLAIM_TYPE, TYPE_REFRESH
-        );
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(CLAIM_TYPE, TYPE_REFRESH);
 
         return JwtUtils.buildRefreshToken(
                 secretKey,

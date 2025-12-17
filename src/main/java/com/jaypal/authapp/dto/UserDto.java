@@ -1,8 +1,6 @@
-package com.jaypal.authapp.dtos;
+package com.jaypal.authapp.dto;
 
-import com.jaypal.authapp.entities.Provider;
-import com.jaypal.authapp.entities.Role;
-import jakarta.persistence.*;
+import com.jaypal.authapp.entity.Provider;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

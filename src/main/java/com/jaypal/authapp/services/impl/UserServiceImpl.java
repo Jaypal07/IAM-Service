@@ -1,11 +1,11 @@
 package com.jaypal.authapp.services.impl;
 
-import com.jaypal.authapp.dtos.UserDto;
-import com.jaypal.authapp.entities.Provider;
-import com.jaypal.authapp.entities.User;
-import com.jaypal.authapp.exceptions.ResourceNotFoundExceptions;
+import com.jaypal.authapp.dto.UserDto;
+import com.jaypal.authapp.entity.Provider;
+import com.jaypal.authapp.entity.User;
+import com.jaypal.authapp.exception.ResourceNotFoundExceptions;
 import com.jaypal.authapp.helpers.UserHelper;
-import com.jaypal.authapp.repositories.UserRepository;
+import com.jaypal.authapp.repository.UserRepository;
 import com.jaypal.authapp.services.UserService;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;

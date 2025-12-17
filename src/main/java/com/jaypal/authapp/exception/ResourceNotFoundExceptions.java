@@ -1,4 +1,4 @@
-package com.jaypal.authapp.exceptions;
+package com.jaypal.authapp.exception;
 
 public class ResourceNotFoundExceptions extends RuntimeException{
     public ResourceNotFoundExceptions(String message){

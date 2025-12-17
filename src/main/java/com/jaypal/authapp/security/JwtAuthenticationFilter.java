@@ -1,7 +1,7 @@
 package com.jaypal.authapp.security;
 
 import com.jaypal.authapp.helpers.UserHelper;
-import com.jaypal.authapp.repositories.UserRepository;
+import com.jaypal.authapp.repository.UserRepository;
 import io.jsonwebtoken.*;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

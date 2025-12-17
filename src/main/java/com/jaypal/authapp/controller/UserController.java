@@ -1,13 +1,11 @@
-package com.jaypal.authapp.controllers;
+package com.jaypal.authapp.controller;
 
-import com.jaypal.authapp.dtos.UserDto;
+import com.jaypal.authapp.dto.UserDto;
 import com.jaypal.authapp.services.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/users")

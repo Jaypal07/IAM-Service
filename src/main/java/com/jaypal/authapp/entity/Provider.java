@@ -1,4 +1,4 @@
-package com.jaypal.authapp.entities;
+package com.jaypal.authapp.entity;
 
 public enum Provider {
     LOCAL, GOOGLE, GITHUB, FACEBOOK

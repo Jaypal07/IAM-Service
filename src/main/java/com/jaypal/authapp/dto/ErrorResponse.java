@@ -1,4 +1,4 @@
-package com.jaypal.authapp.dtos;
+package com.jaypal.authapp.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDateTime;

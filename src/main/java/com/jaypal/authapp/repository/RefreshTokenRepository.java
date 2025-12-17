@@ -1,6 +1,6 @@
-package com.jaypal.authapp.repositories;
+package com.jaypal.authapp.repository;
 
-import com.jaypal.authapp.entities.RefreshToken;
+import com.jaypal.authapp.entity.RefreshToken;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

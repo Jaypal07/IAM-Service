@@ -1,6 +1,6 @@
-package com.jaypal.authapp.exceptions;
+package com.jaypal.authapp.exception;
 
-import com.jaypal.authapp.dtos.ErrorResponse;
+import com.jaypal.authapp.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
