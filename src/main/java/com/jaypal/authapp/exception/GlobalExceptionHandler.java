@@ -1,4 +1,4 @@
-package com.jaypal.authapp.common.exception;
+package com.jaypal.authapp.exception;
 
 import com.jaypal.authapp.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;

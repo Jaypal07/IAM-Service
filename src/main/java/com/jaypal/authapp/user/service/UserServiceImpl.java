@@ -1,6 +1,6 @@
 package com.jaypal.authapp.user.service;
 
-import com.jaypal.authapp.common.exception.ResourceNotFoundExceptions;
+import com.jaypal.authapp.exception.ResourceNotFoundExceptions;
 import com.jaypal.authapp.dto.*;
 import com.jaypal.authapp.user.mapper.UserMapper;
 import com.jaypal.authapp.user.model.Role;

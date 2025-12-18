@@ -1,4 +1,4 @@
-package com.jaypal.authapp.infrastructure.cookie;
+package com.jaypal.authapp.security.cookie;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Getter;

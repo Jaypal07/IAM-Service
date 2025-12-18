@@ -7,7 +7,7 @@ import com.jaypal.authapp.auth.dto.TokenResponse;
 import com.jaypal.authapp.auth.service.AuthService;
 import com.jaypal.authapp.dto.ForgotPasswordRequest;
 import com.jaypal.authapp.dto.UserCreateRequest;
-import com.jaypal.authapp.infrastructure.cookie.CookieService;
+import com.jaypal.authapp.security.cookie.CookieService;
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import com.jaypal.authapp.token.model.RefreshToken;
