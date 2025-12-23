@@ -1,5 +1,7 @@
 package com.jaypal.authapp.oauth.service;
 
+import com.jaypal.authapp.audit.annotation.AuthAudit;
+import com.jaypal.authapp.audit.model.AuthAuditEvent;
 import com.jaypal.authapp.oauth.mapper.OAuthUserInfoMapperFactory;
 import com.jaypal.authapp.oauth.model.ValidatedOAuthUserInfo;
 import com.jaypal.authapp.security.jwt.JwtService;
@@ -21,6 +23,10 @@ public class OAuthLoginService {
     private final RefreshTokenService refreshTokenService;
     private final JwtService jwtService;
 
+    @AuthAudit(
+            event = AuthAuditEvent.OAUTH_LOGIN_SUCCESS,
+            provider = "OAUTH"
+    )
     @Transactional
     public OAuthLoginResult login(OAuth2AuthenticationToken authentication) {
 

@@ -1,7 +1,11 @@
 package com.jaypal.authapp.exception;
 
+import com.jaypal.authapp.audit.annotation.AuthAudit;
+import com.jaypal.authapp.audit.model.AuthAuditEvent;
+import com.jaypal.authapp.audit.service.AuthAuditService;
 import com.jaypal.authapp.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,11 +25,14 @@ import java.util.Map;
 
 @Slf4j
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
     // ---------------------------------------------------------
     // COMMON UTILITIES
     // ---------------------------------------------------------
+
+    private final AuthAuditService authAuditService;
 
     private String extractPath(WebRequest request) {
         if (request instanceof ServletWebRequest servletRequest) {
@@ -52,9 +59,32 @@ public class GlobalExceptionHandler {
     // ---------------------------------------------------------
     // AUTHENTICATION EXCEPTIONS
     // ---------------------------------------------------------
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(
+            BadCredentialsException ex,
+            HttpServletRequest request
+    ) {
+
+        authAuditService.log(
+                null,
+                AuthAuditEvent.LOGIN_FAILURE,
+                "LOCAL",
+                request,
+                false,
+                "Invalid username or password"
+        );
+
+        return buildErrorResponse(
+                ex,
+                HttpStatus.UNAUTHORIZED,
+                request.getRequestURI()
+        );
+    }
+
+
     @ExceptionHandler({
             UsernameNotFoundException.class,
-            BadCredentialsException.class,
             DisabledException.class,
             CredentialException.class
     })

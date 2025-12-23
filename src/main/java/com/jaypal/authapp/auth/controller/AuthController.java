@@ -1,5 +1,7 @@
 package com.jaypal.authapp.auth.controller;
 
+import com.jaypal.authapp.audit.annotation.AuthAudit;
+import com.jaypal.authapp.audit.model.AuthAuditEvent;
 import com.jaypal.authapp.auth.dto.AuthLoginResult;
 import com.jaypal.authapp.auth.dto.LoginRequest;
 import com.jaypal.authapp.auth.dto.RefreshTokenRequest;
@@ -43,6 +45,7 @@ public class AuthController {
 
     // ---------------- Register ----------------
 
+    @AuthAudit(event = AuthAuditEvent.REGISTER_AND_LOGIN)
     @PostMapping("/register")
     public ResponseEntity<TokenResponse> register(
             @RequestBody @Valid UserCreateRequest request,
@@ -74,6 +77,7 @@ public class AuthController {
 
     // ---------------- LOGIN ----------------
 
+    @AuthAudit(event = AuthAuditEvent.LOGIN_SUCCESS)
     @Transactional
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(
@@ -108,6 +112,7 @@ public class AuthController {
 
     // ---------------- REFRESH ----------------
 
+    @AuthAudit(event = AuthAuditEvent.TOKEN_ROTATION)
     @Transactional
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponse> refresh(
@@ -163,6 +168,7 @@ public class AuthController {
 
     // ---------------- LOGOUT ----------------
 
+    @AuthAudit(event = AuthAuditEvent.LOGOUT)
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
             HttpServletRequest request,
