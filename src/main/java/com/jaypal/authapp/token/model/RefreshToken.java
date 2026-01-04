@@ -16,7 +16,6 @@ import java.util.UUID;
         }
 )
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -25,6 +24,9 @@ public class RefreshToken {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Version
+    private long version;
 
     @Column(nullable = false, unique = true, updatable = false)
     private String jti;
@@ -36,19 +38,26 @@ public class RefreshToken {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private Instant expiresAt;
 
     @Column(nullable = false)
     private boolean revoked;
+
+    private Instant revokedAt;
 
     @Column(name = "replaced_by_token")
     private String replacedByToken;
 
     @PrePersist
     void onCreate() {
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
+        this.createdAt = Instant.now();
+        this.revoked = false;
+    }
+
+    public void revoke(String replacedBy) {
+        this.revoked = true;
+        this.revokedAt = Instant.now();
+        this.replacedByToken = replacedBy;
     }
 }

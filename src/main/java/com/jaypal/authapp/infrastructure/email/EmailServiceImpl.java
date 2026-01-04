@@ -1,18 +1,22 @@
 package com.jaypal.authapp.infrastructure.email;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
 
     @Override
     public void sendPasswordResetEmail(String to, String resetLink) {
+        log.info("Sending password reset email");
+
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
         message.setSubject("Reset your password");
@@ -28,20 +32,19 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendVerificationEmail(String to, String verifyLink) {
+        log.info("Sending verification email");
+
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
         message.setSubject("Verify your email address");
         message.setText("""
-                Welcome! 🎉
+                Welcome!
 
                 Please verify your email address by clicking the link below:
 
                 %s
-
-                If you did not create this account, please ignore this email.
                 """.formatted(verifyLink));
 
         mailSender.send(message);
     }
 }
-

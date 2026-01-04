@@ -12,11 +12,13 @@ import com.jaypal.authapp.user.model.User;
 import com.jaypal.authapp.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OAuthLoginService {
 
     private final UserRepository userRepository;
@@ -30,31 +32,31 @@ public class OAuthLoginService {
     @Transactional
     public OAuthLoginResult login(OAuth2AuthenticationToken authentication) {
 
-        Provider provider =
-                Provider.valueOf(
-                        authentication
-                                .getAuthorizedClientRegistrationId()
-                                .toUpperCase()
-                );
+        Provider provider = Provider.valueOf(
+                authentication.getAuthorizedClientRegistrationId().toUpperCase()
+        );
+
+        log.info("OAuth login started. provider={}", provider);
 
         ValidatedOAuthUserInfo info =
-                OAuthUserInfoMapperFactory
-                        .get(provider)
+                OAuthUserInfoMapperFactory.get(provider)
                         .map(authentication.getPrincipal().getAttributes());
 
         User user = userRepository
                 .findByProviderAndProviderId(provider, info.providerId())
-                .orElseGet(() ->
-                        userRepository.save(
-                                User.createOAuth(
-                                        provider,
-                                        info.providerId(),
-                                        info.email(),
-                                        info.name(),
-                                        info.image()
-                                )
-                        )
-                );
+                .orElseGet(() -> {
+                    log.info("Creating OAuth user. provider={}, providerId={}",
+                            provider, info.providerId());
+                    return userRepository.save(
+                            User.createOAuth(
+                                    provider,
+                                    info.providerId(),
+                                    info.email(),
+                                    info.name(),
+                                    info.image()
+                            )
+                    );
+                });
 
         RefreshToken refreshToken =
                 refreshTokenService.issue(
@@ -64,10 +66,7 @@ public class OAuthLoginService {
 
         return new OAuthLoginResult(
                 jwtService.generateAccessToken(user),
-                jwtService.generateRefreshToken(
-                        user,
-                        refreshToken.getJti()
-                ),
+                jwtService.generateRefreshToken(user, refreshToken.getJti()),
                 jwtService.getRefreshTtlSeconds()
         );
     }

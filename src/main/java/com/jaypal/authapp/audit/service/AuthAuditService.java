@@ -10,9 +10,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthAuditService {
 
     private final AuthAuditRepository repository;
@@ -27,10 +27,8 @@ public class AuthAuditService {
     ) {
         try {
             if (!success && !AuthAuditMatrix.isAllowed(event, failureReason)) {
-                log.warn(
-                        "Invalid audit event/reason combination. event={}, reason={}",
-                        event, failureReason
-                );
+                log.warn("Invalid audit event/failure combination. event={}, reason={}",
+                        event, failureReason);
                 failureReason = AuthFailureReason.SYSTEM_ERROR;
             }
 
@@ -47,11 +45,7 @@ public class AuthAuditService {
             );
 
         } catch (Exception ex) {
-            // ABSOLUTE RULE: audit must never break auth
-            log.error(
-                    "Audit logging failed. event={}, success={}, reason={}",
-                    event, success, failureReason, ex
-            );
+            log.error("Audit logging failed. event={}, success={}", event, success, ex);
         }
     }
 

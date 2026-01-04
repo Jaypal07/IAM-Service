@@ -2,7 +2,10 @@ package com.jaypal.authapp.auth.controller;
 
 import com.jaypal.authapp.audit.annotation.AuthAudit;
 import com.jaypal.authapp.audit.model.AuthAuditEvent;
-import com.jaypal.authapp.auth.dto.*;
+import com.jaypal.authapp.auth.dto.AuthLoginResult;
+import com.jaypal.authapp.auth.dto.LoginRequest;
+import com.jaypal.authapp.auth.dto.ResetPasswordRequest;
+import com.jaypal.authapp.auth.dto.TokenResponse;
 import com.jaypal.authapp.auth.service.AuthService;
 import com.jaypal.authapp.auth.service.EmailVerificationService;
 import com.jaypal.authapp.dto.ForgotPasswordRequest;
@@ -23,10 +26,17 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.*;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -38,7 +48,7 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
-    private final AuthService authApplicationService;
+    private final AuthService authService;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final CookieService cookieService;
@@ -51,19 +61,26 @@ public class AuthController {
     public ResponseEntity<String> register(
             @RequestBody @Valid UserCreateRequest request
     ) {
-        authApplicationService.register(request);
-        return ResponseEntity.status(201).body("Registration successful. Please check your email to verify your account.");
+        authService.register(request);
+        return ResponseEntity
+                .status(201)
+                .body("Registration successful. Please verify your email.");
     }
 
-    // Add the verification callback endpoint
+    // ---------------- EMAIL VERIFY ----------------
+
     @GetMapping("/email-verify")
-    public ResponseEntity<String> verifyEmail(@RequestParam String token) {
+    public ResponseEntity<String> verifyEmail(
+            @RequestParam String token
+    ) {
         emailVerificationService.verifyEmail(token);
-        return ResponseEntity.ok("Email verified successfully! You can now log in.");
+        return ResponseEntity.ok("Email verified successfully.");
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<Void> resendVerification(@RequestParam String email) {
+    public ResponseEntity<Void> resendVerification(
+            @RequestParam String email
+    ) {
         emailVerificationService.resendVerificationToken(email);
         return ResponseEntity.noContent().build();
     }
@@ -77,20 +94,30 @@ public class AuthController {
             HttpServletResponse response
     ) {
 
-        Authentication authentication = authenticate(request);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        Authentication authentication =
+                authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(
+                                request.email(),
+                                request.password()
+                        )
+                );
+
+        SecurityContextHolder
+                .getContext()
+                .setAuthentication(authentication);
 
         AuthPrincipal principal =
                 (AuthPrincipal) authentication.getPrincipal();
 
         AuthLoginResult result =
-                authApplicationService.login(principal);
+                authService.login(principal);
 
         cookieService.attachRefreshCookie(
                 response,
                 result.refreshToken(),
                 (int) result.refreshTtlSeconds()
         );
+
         cookieService.addNoStoreHeader(response);
 
         return ResponseEntity.ok(
@@ -107,14 +134,17 @@ public class AuthController {
     @AuthAudit(event = AuthAuditEvent.TOKEN_ROTATION)
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponse> refresh(
-            @RequestBody(required = false) RefreshTokenRequest body,
             HttpServletRequest request,
             HttpServletResponse response
     ) {
 
-        String refreshJwt = readRefreshToken(body, request)
-                .orElseThrow(() ->
-                        new BadCredentialsException("Refresh token is missing"));
+        String refreshJwt =
+                readRefreshToken(request)
+                        .orElseThrow(() ->
+                                new BadCredentialsException(
+                                        "Refresh token missing"
+                                )
+                        );
 
         Jws<Claims> parsed;
         try {
@@ -124,7 +154,7 @@ public class AuthController {
         }
 
         if (!jwtService.isRefreshToken(parsed)) {
-            throw new BadCredentialsException("Invalid refresh token");
+            throw new BadCredentialsException("Invalid token type");
         }
 
         Claims claims = parsed.getBody();
@@ -143,7 +173,7 @@ public class AuthController {
         String accessToken =
                 jwtService.generateAccessToken(current.getUser());
 
-        String newRefreshJwt =
+        String newRefreshToken =
                 jwtService.generateRefreshToken(
                         current.getUser(),
                         next.getJti()
@@ -151,9 +181,10 @@ public class AuthController {
 
         cookieService.attachRefreshCookie(
                 response,
-                newRefreshJwt,
+                newRefreshToken,
                 (int) jwtService.getRefreshTtlSeconds()
         );
+
         cookieService.addNoStoreHeader(response);
 
         return ResponseEntity.ok(
@@ -174,13 +205,18 @@ public class AuthController {
             HttpServletResponse response
     ) {
 
-        readRefreshToken(null, request).ifPresent(token -> {
+        readRefreshToken(request).ifPresent(token -> {
             try {
                 Jws<Claims> parsed = jwtService.parse(token);
                 if (jwtService.isRefreshToken(parsed)) {
-                    refreshTokenService.revokeIfExists(parsed.getBody().getId());
+                    UUID userId =
+                            UUID.fromString(
+                                    parsed.getBody().getSubject()
+                            );
+                    refreshTokenService.revokeAllForUser(userId);
                 }
-            } catch (JwtException ignored) {}
+            } catch (JwtException ignored) {
+            }
         });
 
         cookieService.clearRefreshCookie(response);
@@ -196,62 +232,59 @@ public class AuthController {
     public ResponseEntity<Void> forgotPassword(
             @RequestBody ForgotPasswordRequest request
     ) {
-
-        authApplicationService.initiatePasswordReset(request.email());
+        authService.initiatePasswordReset(request.email());
         return ResponseEntity.noContent().build();
     }
 
     // ---------------- RESET PASSWORD ----------------
 
     @PostMapping("/reset-password")
-    public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request) {
-        authApplicationService.resetPassword(request.token(), request.newPassword());
-        return ResponseEntity.ok("Password has been reset successfully.");
+    public ResponseEntity<String> resetPassword(
+            @RequestBody ResetPasswordRequest request
+    ) {
+        authService.resetPassword(
+                request.token(),
+                request.newPassword()
+        );
+        return ResponseEntity.ok("Password reset successful.");
     }
 
     // ---------------- HELPERS ----------------
 
     private Optional<String> readRefreshToken(
-            RefreshTokenRequest body,
             HttpServletRequest request
     ) {
 
         if (request.getCookies() != null) {
-            Optional<String> cookieToken = Arrays.stream(request.getCookies())
-                    .filter(c ->
-                            cookieService.getRefreshTokenCookieName()
-                                    .equals(c.getName()))
-                    .map(Cookie::getValue)
-                    .filter(v -> !v.isBlank())
-                    .findFirst();
+            Optional<String> cookieToken =
+                    Arrays.stream(request.getCookies())
+                            .filter(cookie ->
+                                    cookieService
+                                            .getRefreshTokenCookieName()
+                                            .equals(cookie.getName())
+                            )
+                            .map(Cookie::getValue)
+                            .filter(value -> !value.isBlank())
+                            .findFirst();
 
-            if (cookieToken.isPresent()) return cookieToken;
+            if (cookieToken.isPresent()) {
+                return cookieToken;
+            }
         }
 
-        if (body != null && body.refreshToken() != null
-                && !body.refreshToken().isBlank()) {
-            return Optional.of(body.refreshToken());
-        }
-
-        String headerToken = request.getHeader("X-Refresh-Token");
+        String headerToken =
+                request.getHeader("X-Refresh-Token");
         if (headerToken != null && !headerToken.isBlank()) {
             return Optional.of(headerToken.trim());
         }
 
-        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authHeader != null && authHeader.toLowerCase().startsWith("bearer ")) {
+        String authHeader =
+                request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authHeader != null &&
+                authHeader.toLowerCase().startsWith("bearer ")) {
             return Optional.of(authHeader.substring(7).trim());
         }
 
         return Optional.empty();
-    }
-
-    private Authentication authenticate(LoginRequest request) {
-            return authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.email(),
-                            request.password()
-                    )
-            );
     }
 }
