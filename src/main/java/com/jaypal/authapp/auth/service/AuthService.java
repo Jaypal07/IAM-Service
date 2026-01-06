@@ -7,6 +7,11 @@ import com.jaypal.authapp.auth.repositoty.PasswordResetTokenRepository;
 import com.jaypal.authapp.config.FrontendProperties;
 import com.jaypal.authapp.dto.UserCreateRequest;
 import com.jaypal.authapp.auth.infrastructure.email.EmailService;
+import com.jaypal.authapp.exception.refresh.InvalidRefreshTokenException;
+import com.jaypal.authapp.exception.user.AuthenticatedUserMissingException;
+import com.jaypal.authapp.exception.user.PasswordPolicyViolationException;
+import com.jaypal.authapp.exception.user.PasswordResetTokenExpiredException;
+import com.jaypal.authapp.exception.user.PasswordResetTokenInvalidException;
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import com.jaypal.authapp.token.model.RefreshToken;
@@ -15,13 +20,11 @@ import com.jaypal.authapp.user.model.User;
 import com.jaypal.authapp.user.repository.UserRepository;
 import com.jaypal.authapp.user.service.UserService;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,8 +62,7 @@ public class AuthService {
     public AuthLoginResult login(AuthPrincipal principal) {
 
         User user = userRepository.findById(principal.getUserId())
-                .orElseThrow(() ->
-                        new IllegalStateException("Authenticated user not found"));
+                .orElseThrow(AuthenticatedUserMissingException::new);
 
         return issueTokens(user);
     }
@@ -74,11 +76,11 @@ public class AuthService {
         try {
             parsed = jwtService.parse(refreshJwt);
         } catch (JwtException ex) {
-            throw new JwtException("Invalid refresh token");
+            throw new InvalidRefreshTokenException();
         }
 
         if (!jwtService.isRefreshToken(parsed)) {
-            throw new IllegalArgumentException("Invalid token type");
+            throw new InvalidRefreshTokenException();
         }
 
         Claims claims = parsed.getBody();
@@ -189,18 +191,17 @@ public class AuthService {
     public void resetPassword(String tokenValue, String rawPassword) {
 
         if (rawPassword == null || rawPassword.length() < 8) {
-            throw new IllegalArgumentException("Password too short");
+            throw new PasswordPolicyViolationException();
         }
 
         PasswordResetToken token =
                 passwordResetTokenRepository
                         .findByToken(tokenValue)
-                        .orElseThrow(() ->
-                                new JwtException("Invalid reset token"));
+                        .orElseThrow(PasswordResetTokenInvalidException::new);
 
         if (token.isUsed()
                 || token.getExpiresAt().isBefore(Instant.now())) {
-            throw new ExpiredJwtException(null, null, "Reset token expired or used");
+            throw new PasswordResetTokenExpiredException();
         }
 
         User user = token.getUser();

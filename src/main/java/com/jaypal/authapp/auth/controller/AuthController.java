@@ -96,6 +96,8 @@ public class AuthController {
             HttpServletResponse response
     ) {
 
+        AuditContext.setEmail(request.email());
+
         Authentication authentication =
                 authenticationManager.authenticate(
                         new UsernamePasswordAuthenticationToken(

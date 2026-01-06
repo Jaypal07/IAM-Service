@@ -1,8 +1,9 @@
 package com.jaypal.authapp.exception.email;
 
-public class EmailNotRegisteredException extends RuntimeException {
+import com.jaypal.authapp.exception.base.DomainException;
 
+public class EmailNotRegisteredException extends DomainException {
     public EmailNotRegisteredException() {
-        super();
+        super("Email not registered");
     }
 }

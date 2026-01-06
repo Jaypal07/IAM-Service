@@ -1,7 +1,9 @@
 package com.jaypal.authapp.exception.email;
 
-public class EmailAlreadyVerifiedException extends RuntimeException {
+import com.jaypal.authapp.exception.base.DomainException;
+
+public class EmailAlreadyVerifiedException extends DomainException {
     public EmailAlreadyVerifiedException() {
-        super();
+        super("Email already verified");
     }
 }

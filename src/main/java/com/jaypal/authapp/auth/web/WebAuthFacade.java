@@ -4,12 +4,12 @@ import com.jaypal.authapp.auth.dto.AuthLoginResult;
 import com.jaypal.authapp.auth.infrastructure.RefreshTokenExtractor;
 import com.jaypal.authapp.auth.service.AuthService;
 import com.jaypal.authapp.auth.infrastructure.cookie.CookieService;
+import com.jaypal.authapp.exception.refresh.MissingRefreshTokenException;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -49,10 +49,7 @@ public class WebAuthFacade {
 
         String refreshToken =
                 refreshTokenExtractor.extract(request)
-                        .orElseThrow(() ->
-                                new IllegalArgumentException(
-                                        "Refresh token missing"
-                                ));
+                        .orElseThrow(MissingRefreshTokenException::new);
 
         AuthLoginResult result =
                 authService.refresh(refreshToken);

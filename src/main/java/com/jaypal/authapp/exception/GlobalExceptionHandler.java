@@ -1,18 +1,15 @@
 package com.jaypal.authapp.exception;
 
-import com.jaypal.authapp.exception.email.EmailAlreadyVerifiedException;
-import com.jaypal.authapp.exception.email.EmailNotRegisteredException;
-import com.jaypal.authapp.exception.email.VerificationException;
-import com.jaypal.authapp.exception.refresh.RefreshTokenException;
+import com.jaypal.authapp.exception.email.*;
+import com.jaypal.authapp.exception.refresh.*;
+import com.jaypal.authapp.exception.user.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
-import org.springframework.security.authentication.LockedException;
+import org.springframework.security.authentication.*;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -81,9 +78,32 @@ public class GlobalExceptionHandler {
     // AUTHENTICATION
     // ---------------------------------------------------------
 
-    @ExceptionHandler(DisabledException.class)
-    public ResponseEntity<Map<String, Object>> handleDisabled(
-            DisabledException ex,
+    @ExceptionHandler({
+            BadCredentialsException.class,
+            InvalidCredentialsException.class,
+            UsernameNotFoundException.class
+    })
+    public ResponseEntity<Map<String, Object>> handleInvalidCredentials(
+            Exception ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.UNAUTHORIZED,
+                "Authentication failed",
+                "Invalid username or password.",
+                request,
+                "Authentication failure: invalid credentials",
+                ex,
+                false
+        );
+    }
+
+    @ExceptionHandler({
+            DisabledException.class,
+            UserAccountDisabledException.class
+    })
+    public ResponseEntity<Map<String, Object>> handleAccountDisabled(
+            Exception ex,
             WebRequest request
     ) {
         return problem(
@@ -97,23 +117,35 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler({
-            BadCredentialsException.class,
-            UsernameNotFoundException.class,
-            LockedException.class
-    })
-    public ResponseEntity<Map<String, Object>> handleAuthFailures(
-            Exception ex,
+    @ExceptionHandler(LockedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccountLocked(
+            LockedException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.FORBIDDEN,
+                "Account locked",
+                "Your account is locked. Please contact support.",
+                request,
+                "Authentication failure: account locked",
+                ex,
+                false
+        );
+    }
+
+    @ExceptionHandler(AuthenticatedUserMissingException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthenticatedUserMissing(
+            AuthenticatedUserMissingException ex,
             WebRequest request
     ) {
         return problem(
                 HttpStatus.UNAUTHORIZED,
-                "Authentication failed",
-                "Invalid username or password.",
+                "Authentication context invalid",
+                "Authentication state is no longer valid. Please log in again.",
                 request,
-                "Authentication failure: " + ex.getClass().getSimpleName(),
+                "Authenticated user missing",
                 ex,
-                false
+                true
         );
     }
 
@@ -134,43 +166,27 @@ public class GlobalExceptionHandler {
                 "Access denied",
                 "You do not have permission to access this resource.",
                 request,
-                "Authorization failure: " + ex.getClass().getSimpleName(),
+                "Authorization failure",
                 ex,
                 false
         );
     }
 
     // ---------------------------------------------------------
-    // BUSINESS
+    // EMAIL / VERIFICATION
     // ---------------------------------------------------------
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleNotFound(
-            ResourceNotFoundException ex,
+    @ExceptionHandler(EmailAlreadyExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleEmailAlreadyExists(
+            EmailAlreadyExistsException ex,
             WebRequest request
     ) {
         return problem(
-                HttpStatus.NOT_FOUND,
-                "Resource not found",
+                HttpStatus.CONFLICT,
+                "Email already exists",
                 ex.getMessage(),
                 request,
-                "Resource not found",
-                ex,
-                false
-        );
-    }
-
-    @ExceptionHandler(VerificationException.class)
-    public ResponseEntity<Map<String, Object>> handleVerification(
-            VerificationException ex,
-            WebRequest request
-    ) {
-        return problem(
-                HttpStatus.BAD_REQUEST,
-                "Verification failed",
-                ex.getMessage(),
-                request,
-                "Verification failure",
+                "Duplicate email",
                 ex,
                 false
         );
@@ -184,23 +200,77 @@ public class GlobalExceptionHandler {
         return problem(
                 HttpStatus.CONFLICT,
                 "Account already verified",
-                ex.getMessage(),
+                "This email address is already verified.",
                 request,
                 "Account already verified",
                 ex,
                 false
         );
     }
+
     @ExceptionHandler({
-            EmailNotRegisteredException.class,
+            VerificationTokenExpiredException.class,
+            VerificationTokenInvalidException.class
     })
-    public ResponseEntity<Void> swallowVerificationExceptions() {
+    public ResponseEntity<Map<String, Object>> handleVerificationTokenFailures(
+            RuntimeException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.BAD_REQUEST,
+                "Verification failed",
+                ex.getMessage(),
+                request,
+                "Email verification failure",
+                ex,
+                false
+        );
+    }
+
+    @ExceptionHandler(EmailNotRegisteredException.class)
+    public ResponseEntity<Void> swallowEmailNotRegistered() {
         return ResponseEntity.noContent().build();
     }
 
-    @ExceptionHandler(RefreshTokenException.class)
-    public ResponseEntity<Map<String, Object>> handleRefreshTokenFailure(
-            RefreshTokenException ex,
+    // ---------------------------------------------------------
+    // PASSWORD RESET
+    // ---------------------------------------------------------
+
+    @ExceptionHandler({
+            PasswordPolicyViolationException.class,
+            PasswordResetTokenInvalidException.class,
+            PasswordResetTokenExpiredException.class
+    })
+    public ResponseEntity<Map<String, Object>> handlePasswordFailures(
+            RuntimeException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.BAD_REQUEST,
+                "Password operation failed",
+                ex.getMessage(),
+                request,
+                "Password operation failure",
+                ex,
+                false
+        );
+    }
+
+    // ---------------------------------------------------------
+    // REFRESH TOKEN
+    // ---------------------------------------------------------
+
+    @ExceptionHandler({
+            RefreshTokenExpiredException.class,
+            RefreshTokenNotFoundException.class,
+            RefreshTokenRevokedException.class,
+            RefreshTokenUserMismatchException.class,
+            RefreshTokenException.class,
+            InvalidRefreshTokenException.class,
+            MissingRefreshTokenException.class
+    })
+    public ResponseEntity<Map<String, Object>> handleRefreshTokenFailures(
+            RuntimeException ex,
             WebRequest request
     ) {
         return problem(
@@ -208,7 +278,7 @@ public class GlobalExceptionHandler {
                 "Invalid refresh token",
                 "Your session has expired. Please log in again.",
                 request,
-                "Refresh token validation failed: " + ex.getClass().getSimpleName(),
+                "Refresh token failure: " + ex.getClass().getSimpleName(),
                 ex,
                 false
         );
@@ -240,7 +310,7 @@ public class GlobalExceptionHandler {
     }
 
     // ---------------------------------------------------------
-    // DATA INTEGRITY (POSTGRES + HIBERNATE)
+    // DATA INTEGRITY
     // ---------------------------------------------------------
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -248,41 +318,21 @@ public class GlobalExceptionHandler {
             DataIntegrityViolationException ex,
             WebRequest request
     ) {
-        // 1. Hibernate constraint violation
         Throwable cause = ex.getCause();
         if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
-            String constraint = cve.getConstraintName();
-
-            if ("users_email".equalsIgnoreCase(constraint)) {
+            if ("users_email".equalsIgnoreCase(cve.getConstraintName())) {
                 return problem(
                         HttpStatus.CONFLICT,
                         "Email already exists",
                         "An account with this email address already exists.",
                         request,
-                        "Duplicate email constraint violation (Hibernate)",
+                        "Duplicate email constraint violation",
                         ex,
                         false
                 );
             }
         }
 
-        // 2. JDBC SQLState fallback (portable)
-        Throwable root = ex.getRootCause();
-        if (root instanceof java.sql.SQLException sqlEx) {
-            if ("23505".equals(sqlEx.getSQLState())) {
-                return problem(
-                        HttpStatus.CONFLICT,
-                        "Email already exists",
-                        "An account with this email address already exists.",
-                        request,
-                        "Duplicate email constraint violation (SQLState 23505)",
-                        ex,
-                        false
-                );
-            }
-        }
-
-        // 3. Fallback
         return problem(
                 HttpStatus.BAD_REQUEST,
                 "Invalid request",
@@ -293,7 +343,6 @@ public class GlobalExceptionHandler {
                 false
         );
     }
-
 
     // ---------------------------------------------------------
     // FALLBACK

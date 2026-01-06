@@ -2,9 +2,7 @@ package com.jaypal.authapp.auth.service;
 
 import com.jaypal.authapp.auth.repositoty.EmailVerificationTokenRepository;
 import com.jaypal.authapp.config.FrontendProperties;
-import com.jaypal.authapp.exception.email.EmailAlreadyVerifiedException;
-import com.jaypal.authapp.exception.email.EmailNotRegisteredException;
-import com.jaypal.authapp.exception.email.VerificationException;
+import com.jaypal.authapp.exception.email.*;
 import com.jaypal.authapp.auth.infrastructure.email.EmailService;
 import com.jaypal.authapp.user.model.User;
 import com.jaypal.authapp.user.model.VerificationToken;
@@ -69,13 +67,12 @@ public class EmailVerificationService {
     public void verifyEmail(String tokenValue) {
 
         VerificationToken token = tokenRepository.findByToken(tokenValue)
-                .orElseThrow(() ->
-                        new VerificationException("Invalid verification token")
+                .orElseThrow(VerificationTokenInvalidException::new
                 );
 
         if (token.isExpired()) {
             tokenRepository.delete(token);
-            throw new VerificationException("Invalid verification token");
+            throw new VerificationTokenExpiredException();
         }
 
         User user = token.getUser();

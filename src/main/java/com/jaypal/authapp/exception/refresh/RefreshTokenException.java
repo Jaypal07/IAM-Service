@@ -1,6 +1,8 @@
 package com.jaypal.authapp.exception.refresh;
 
-public abstract class RefreshTokenException extends RuntimeException {
+import com.jaypal.authapp.exception.base.SecurityException;
+
+public abstract class RefreshTokenException extends SecurityException {
 
     protected RefreshTokenException(String message) {
         super(message);

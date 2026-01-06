@@ -1,7 +1,8 @@
 package com.jaypal.authapp.user.service;
 
 import com.jaypal.authapp.dto.*;
-import com.jaypal.authapp.exception.ResourceNotFoundException;
+import com.jaypal.authapp.exception.user.ResourceNotFoundException;
+import com.jaypal.authapp.exception.email.EmailAlreadyExistsException;
 import com.jaypal.authapp.user.mapper.UserMapper;
 import com.jaypal.authapp.user.model.Role;
 import com.jaypal.authapp.user.model.User;
@@ -46,7 +47,7 @@ public class UserServiceImpl implements UserService {
 
         } catch (DataIntegrityViolationException ex) {
             log.warn("User creation failed. Email already exists. email={}", req.email());
-            throw new IllegalArgumentException("Email already exists");
+            throw new EmailAlreadyExistsException();
         }
     }
 
@@ -144,7 +145,7 @@ public class UserServiceImpl implements UserService {
 
         } catch (DataIntegrityViolationException ex) {
             log.warn("Domain user creation failed. Email exists. email={}", req.email());
-            throw new IllegalArgumentException("Email already exists");
+            throw new EmailAlreadyExistsException();
         }
     }
 
