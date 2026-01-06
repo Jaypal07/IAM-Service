@@ -2,29 +2,24 @@ package com.jaypal.authapp.audit.model;
 
 public enum AuthFailureReason {
 
-    // ---------- LOGIN ----------
     INVALID_CREDENTIALS,
     USER_NOT_FOUND,
     ACCOUNT_DISABLED,
     ACCOUNT_LOCKED,
 
-    // ---------- TOKEN ----------
     TOKEN_MISSING,
     TOKEN_INVALID,
     TOKEN_EXPIRED,
     TOKEN_REVOKED,
 
-    // ---------- REGISTRATION ----------
     EMAIL_ALREADY_EXISTS,
     EMAIL_ALREADY_VERIFIED,
     EMAIL_NOT_REGISTERED,
     VALIDATION_FAILED,
 
-    // ---------- PASSWORD ----------
     RESET_TOKEN_INVALID,
     RESET_TOKEN_EXPIRED,
     PASSWORD_POLICY_VIOLATION,
 
-    // ---------- SYSTEM ----------
     SYSTEM_ERROR
 }

@@ -41,9 +41,11 @@ public class AuthAuditService {
                             .success(success)
                             .failureReason(success ? null : failureReason)
                             .ipAddress(extractIp(request))
-                            .userAgent(request != null
-                                    ? request.getHeader("User-Agent")
-                                    : null)
+                            .userAgent(
+                                    request != null
+                                            ? request.getHeader("User-Agent")
+                                            : null
+                            )
                             .build()
             );
 

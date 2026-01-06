@@ -1,6 +1,5 @@
 package com.jaypal.authapp.auth.service;
 
-import com.jaypal.authapp.audit.context.AuditContext;
 import com.jaypal.authapp.auth.dto.AuthLoginResult;
 import com.jaypal.authapp.auth.event.UserRegisteredEvent;
 import com.jaypal.authapp.auth.model.PasswordResetToken;
@@ -16,6 +15,7 @@ import com.jaypal.authapp.user.model.User;
 import com.jaypal.authapp.user.repository.UserRepository;
 import com.jaypal.authapp.user.service.UserService;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
@@ -74,11 +74,11 @@ public class AuthService {
         try {
             parsed = jwtService.parse(refreshJwt);
         } catch (JwtException ex) {
-            throw new BadCredentialsException("Invalid refresh token");
+            throw new JwtException("Invalid refresh token");
         }
 
         if (!jwtService.isRefreshToken(parsed)) {
-            throw new BadCredentialsException("Invalid token type");
+            throw new IllegalArgumentException("Invalid token type");
         }
 
         Claims claims = parsed.getBody();
@@ -196,13 +196,11 @@ public class AuthService {
                 passwordResetTokenRepository
                         .findByToken(tokenValue)
                         .orElseThrow(() ->
-                                new BadCredentialsException(
-                                        "Invalid reset token"));
+                                new JwtException("Invalid reset token"));
 
         if (token.isUsed()
                 || token.getExpiresAt().isBefore(Instant.now())) {
-            throw new BadCredentialsException(
-                    "Reset token expired or used");
+            throw new ExpiredJwtException(null, null, "Reset token expired or used");
         }
 
         User user = token.getUser();

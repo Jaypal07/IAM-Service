@@ -59,7 +59,10 @@ public class AuthController {
                 .body("Registration successful. Please verify your email.");
     }
 
-    @AuthAudit(event = AuthAuditEvent.EMAIL_VERIFY)
+    @AuthAudit(
+            event = AuthAuditEvent.EMAIL_VERIFY,
+            subject = AuditSubjectType.EMAIL
+    )
     @GetMapping("/email-verify")
     public ResponseEntity<String> verifyEmail(
             @RequestParam String token

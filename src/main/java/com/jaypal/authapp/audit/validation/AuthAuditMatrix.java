@@ -3,10 +3,7 @@ package com.jaypal.authapp.audit.validation;
 import com.jaypal.authapp.audit.model.AuthAuditEvent;
 import com.jaypal.authapp.audit.model.AuthFailureReason;
 
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public final class AuthAuditMatrix {
 
@@ -15,7 +12,6 @@ public final class AuthAuditMatrix {
 
     static {
 
-        // ---------- LOGIN ----------
         MATRIX.put(
                 AuthAuditEvent.LOGIN_FAILURE,
                 EnumSet.of(
@@ -26,7 +22,6 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- OAUTH ----------
         MATRIX.put(
                 AuthAuditEvent.OAUTH_LOGIN_FAILURE,
                 EnumSet.of(
@@ -35,7 +30,6 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- TOKEN ----------
         MATRIX.put(
                 AuthAuditEvent.TOKEN_REFRESH,
                 EnumSet.of(
@@ -54,7 +48,6 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- REGISTER ----------
         MATRIX.put(
                 AuthAuditEvent.REGISTER,
                 EnumSet.of(
@@ -63,7 +56,6 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- EMAIL VERIFY ----------
         MATRIX.put(
                 AuthAuditEvent.EMAIL_VERIFY,
                 EnumSet.of(
@@ -73,7 +65,6 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- EMAIL RESEND ----------
         MATRIX.put(
                 AuthAuditEvent.EMAIL_VERIFICATION_RESEND,
                 EnumSet.of(
@@ -83,7 +74,6 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- PASSWORD RESET ----------
         MATRIX.put(
                 AuthAuditEvent.PASSWORD_RESET_FAILURE,
                 EnumSet.of(
@@ -93,7 +83,6 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- PASSWORD CHANGE ----------
         MATRIX.put(
                 AuthAuditEvent.PASSWORD_CHANGE,
                 EnumSet.of(
@@ -102,12 +91,9 @@ public final class AuthAuditMatrix {
                 )
         );
 
-        // ---------- ACCOUNT ----------
         MATRIX.put(
                 AuthAuditEvent.ACCOUNT_DISABLED,
-                EnumSet.of(
-                        AuthFailureReason.ACCOUNT_DISABLED
-                )
+                EnumSet.of(AuthFailureReason.ACCOUNT_DISABLED)
         );
     }
 
