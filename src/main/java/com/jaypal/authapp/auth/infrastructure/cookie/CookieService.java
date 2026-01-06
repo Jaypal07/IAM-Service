@@ -1,20 +1,25 @@
 package com.jaypal.authapp.auth.infrastructure.cookie;
 
+import com.jaypal.authapp.config.JwtCookieProperties;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 @Service
 @Getter
 @Slf4j
 public class CookieService {
+
+    private static final String COOKIE_PATH = "/";
+    private static final String NO_CACHE_HEADER_VALUE =
+            "no-store, no-cache, must-revalidate, max-age=0";
 
     private final String refreshTokenCookieName;
     private final boolean cookieHttpOnly;
@@ -22,24 +27,30 @@ public class CookieService {
     private final String cookieDomain;
     private final String cookieSameSite;
 
-    public CookieService(
-            @Value("${security.jwt.refresh-token-cookie-name}") String refreshTokenCookieName,
-            @Value("${security.jwt.cookie-http-only}") boolean cookieHttpOnly,
-            @Value("${security.jwt.cookie-secure}") boolean cookieSecure,
-            @Value("${security.jwt.cookie-domain}") String cookieDomain,
-            @Value("${security.jwt.cookie-same-site}") String cookieSameSite
-    ) {
-        if ("None".equalsIgnoreCase(cookieSameSite) && !cookieSecure) {
+    public CookieService(JwtCookieProperties properties) {
+        Objects.requireNonNull(properties, "JwtCookieProperties must not be null");
+
+        if ("None".equalsIgnoreCase(properties.getCookieSameSite())
+                && !properties.isCookieSecure()) {
             throw new IllegalStateException(
-                    "SameSite=None requires Secure=true"
+                    "Invalid cookie configuration: SameSite=None requires Secure=true"
             );
         }
 
-        this.refreshTokenCookieName = refreshTokenCookieName;
-        this.cookieHttpOnly = cookieHttpOnly;
-        this.cookieSecure = cookieSecure;
-        this.cookieDomain = cookieDomain;
-        this.cookieSameSite = cookieSameSite;
+        this.refreshTokenCookieName = properties.getRefreshTokenCookieName();
+        this.cookieHttpOnly = properties.isCookieHttpOnly();
+        this.cookieSecure = properties.isCookieSecure();
+        this.cookieDomain = properties.getCookieDomain();
+        this.cookieSameSite = properties.getCookieSameSite();
+
+        log.info(
+                "CookieService initialized [name={}, httpOnly={}, secure={}, sameSite={}, domain={}]",
+                refreshTokenCookieName,
+                cookieHttpOnly,
+                cookieSecure,
+                cookieSameSite,
+                (cookieDomain == null || cookieDomain.isBlank()) ? "<default>" : cookieDomain
+        );
     }
 
     // ---------- SET / OVERWRITE ----------
@@ -49,6 +60,9 @@ public class CookieService {
             String jwt,
             int maxAgeSeconds
     ) {
+        Objects.requireNonNull(response, "HttpServletResponse must not be null");
+        Objects.requireNonNull(jwt, "JWT must not be null");
+
         String encoded =
                 URLEncoder.encode(jwt, StandardCharsets.UTF_8);
 
@@ -56,7 +70,7 @@ public class CookieService {
                 ResponseCookie.from(refreshTokenCookieName, encoded)
                         .httpOnly(cookieHttpOnly)
                         .secure(cookieSecure)
-                        .path("/")
+                        .path(COOKIE_PATH)
                         .maxAge(maxAgeSeconds)
                         .sameSite(cookieSameSite);
 
@@ -73,12 +87,13 @@ public class CookieService {
     // ---------- CLEAR ----------
 
     public void clearRefreshCookie(HttpServletResponse response) {
+        Objects.requireNonNull(response, "HttpServletResponse must not be null");
 
         ResponseCookie.ResponseCookieBuilder builder =
                 ResponseCookie.from(refreshTokenCookieName, "")
                         .httpOnly(cookieHttpOnly)
                         .secure(cookieSecure)
-                        .path("/")
+                        .path(COOKIE_PATH)
                         .maxAge(0)
                         .sameSite(cookieSameSite);
 
@@ -93,10 +108,9 @@ public class CookieService {
     }
 
     public void addNoStoreHeader(HttpServletResponse response) {
-        response.setHeader(
-                HttpHeaders.CACHE_CONTROL,
-                "no-store, no-cache, must-revalidate, max-age=0"
-        );
+        Objects.requireNonNull(response, "HttpServletResponse must not be null");
+
+        response.setHeader(HttpHeaders.CACHE_CONTROL, NO_CACHE_HEADER_VALUE);
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
     }
 }

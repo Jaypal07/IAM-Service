@@ -1,8 +1,12 @@
 package com.jaypal.authapp.user.service;
 
-import com.jaypal.authapp.dto.*;
-import com.jaypal.authapp.exception.user.ResourceNotFoundException;
-import com.jaypal.authapp.exception.email.EmailAlreadyExistsException;
+import com.jaypal.authapp.dto.UserCreateRequest;
+import com.jaypal.authapp.common.exception.user.ResourceNotFoundException;
+import com.jaypal.authapp.common.exception.email.EmailAlreadyExistsException;
+import com.jaypal.authapp.user.application.UserService;
+import com.jaypal.authapp.dto.AdminUserUpdateRequest;
+import com.jaypal.authapp.dto.UserResponseDto;
+import com.jaypal.authapp.dto.UserUpdateRequest;
 import com.jaypal.authapp.user.mapper.UserMapper;
 import com.jaypal.authapp.user.model.Role;
 import com.jaypal.authapp.user.model.User;

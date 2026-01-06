@@ -2,7 +2,8 @@ package com.jaypal.authapp.audit.aspect;
 
 import com.jaypal.authapp.audit.annotation.AuthAudit;
 import com.jaypal.authapp.audit.context.AuditContext;
-import com.jaypal.authapp.audit.model.*;
+import com.jaypal.authapp.audit.domain.AuthAuditEvent;
+import com.jaypal.authapp.audit.domain.AuthFailureReason;
 import com.jaypal.authapp.audit.resolver.*;
 import com.jaypal.authapp.audit.service.AuthAuditService;
 import jakarta.servlet.http.HttpServletRequest;

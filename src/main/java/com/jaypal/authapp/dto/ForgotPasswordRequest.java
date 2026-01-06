@@ -1,6 +1,6 @@
 package com.jaypal.authapp.dto;
 
-import com.jaypal.authapp.audit.model.HasEmail;
+import com.jaypal.authapp.audit.domain.HasEmail;
 
 public record ForgotPasswordRequest(String email)
         implements HasEmail {

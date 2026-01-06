@@ -1,10 +1,10 @@
 package com.jaypal.authapp.auth.web;
 
-import com.jaypal.authapp.auth.dto.AuthLoginResult;
+import com.jaypal.authapp.dto.AuthLoginResult;
 import com.jaypal.authapp.auth.infrastructure.RefreshTokenExtractor;
-import com.jaypal.authapp.auth.service.AuthService;
+import com.jaypal.authapp.auth.application.AuthService;
 import com.jaypal.authapp.auth.infrastructure.cookie.CookieService;
-import com.jaypal.authapp.exception.refresh.MissingRefreshTokenException;
+import com.jaypal.authapp.common.exception.refresh.MissingRefreshTokenException;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

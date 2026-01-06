@@ -1,6 +1,5 @@
 package com.jaypal.authapp.dto;
 
-import com.jaypal.authapp.user.model.Provider;
 import java.util.Set;
 
 public record AdminUserUpdateRequest(

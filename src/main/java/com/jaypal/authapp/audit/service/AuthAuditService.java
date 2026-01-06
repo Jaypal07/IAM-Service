@@ -1,7 +1,9 @@
 package com.jaypal.authapp.audit.service;
 
-import com.jaypal.authapp.audit.model.*;
-import com.jaypal.authapp.audit.repository.AuthAuditRepository;
+import com.jaypal.authapp.audit.domain.AuthAuditEvent;
+import com.jaypal.authapp.audit.domain.AuthFailureReason;
+import com.jaypal.authapp.audit.persistence.AuthAuditLog;
+import com.jaypal.authapp.audit.persistence.AuthAuditRepository;
 import com.jaypal.authapp.audit.validation.AuthAuditMatrix;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;

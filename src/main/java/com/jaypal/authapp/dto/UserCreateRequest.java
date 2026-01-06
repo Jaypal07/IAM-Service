@@ -1,6 +1,6 @@
 package com.jaypal.authapp.dto;
 
-import com.jaypal.authapp.audit.model.HasEmail;
+import com.jaypal.authapp.audit.domain.HasEmail;
 
 public record UserCreateRequest(String email, String password, String name)
         implements HasEmail {

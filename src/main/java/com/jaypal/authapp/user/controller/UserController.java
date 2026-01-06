@@ -2,7 +2,7 @@ package com.jaypal.authapp.user.controller;
 
 import com.jaypal.authapp.dto.UserResponseDto;
 import com.jaypal.authapp.dto.UserUpdateRequest;
-import com.jaypal.authapp.user.service.UserService;
+import com.jaypal.authapp.user.application.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

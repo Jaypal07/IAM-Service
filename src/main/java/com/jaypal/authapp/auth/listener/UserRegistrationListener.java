@@ -1,7 +1,7 @@
 package com.jaypal.authapp.auth.listener;
 
 import com.jaypal.authapp.auth.event.UserRegisteredEvent;
-import com.jaypal.authapp.auth.service.EmailVerificationService;
+import com.jaypal.authapp.auth.application.EmailVerificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
