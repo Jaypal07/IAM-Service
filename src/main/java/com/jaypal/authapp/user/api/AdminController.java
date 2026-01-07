@@ -1,5 +1,6 @@
 package com.jaypal.authapp.user.api;
 
+import com.jaypal.authapp.user.dto.AdminUserRoleUpdateRequest;
 import com.jaypal.authapp.user.dto.AdminUserUpdateRequest;
 import com.jaypal.authapp.user.dto.UserCreateRequest;
 import com.jaypal.authapp.user.dto.UserResponseDto;
@@ -8,7 +9,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,7 +16,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
 
     private final UserService userService;
@@ -47,6 +46,14 @@ public class AdminController {
             @RequestBody AdminUserUpdateRequest req
     ) {
         return userService.adminUpdateUser(id, req);
+    }
+
+    @PutMapping("/{id}/roles")
+    public UserResponseDto updateUserRoles(
+            @PathVariable String id,
+            @RequestBody AdminUserRoleUpdateRequest req
+    ) {
+        return userService.adminUpdateUserRoles(id, req);
     }
 
     @DeleteMapping("/{id}")

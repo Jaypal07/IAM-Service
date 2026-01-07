@@ -10,6 +10,7 @@ import com.jaypal.authapp.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,7 +53,12 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    /* =========================
+       READ OPERATIONS
+       ========================= */
+
     @Override
+    @PreAuthorize("hasAuthority('USER_READ')")
     @Transactional(readOnly = true)
     public UserResponseDto getUserById(String userId) {
         log.debug("Fetching user by ID. userId={}", userId);
@@ -74,6 +80,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @PreAuthorize("hasAuthority('USER_READ')")
     @Transactional(readOnly = true)
     public List<UserResponseDto> getAllUsers() {
         log.debug("Fetching all users");
@@ -99,7 +106,12 @@ public class UserServiceImpl implements UserService {
         return UserMapper.toResponse(userRepository.save(user));
     }
 
+    /* =========================
+        ADMIN UPDATE
+      ========================= */
+
     @Override
+    @PreAuthorize("hasAuthority('USER_UPDATE')")
     @Transactional
     public UserResponseDto adminUpdateUser(String userId, AdminUserUpdateRequest req) {
         log.warn("Admin update invoked. userId={}", userId);
@@ -110,14 +122,17 @@ public class UserServiceImpl implements UserService {
             user.updateProfile(req.name(), req.image());
         }
 
-        if (req.enabled()) {
-            user.enable();
-        } else {
-            user.disable();
+        if (req.enabled() != null) {
+            if (req.enabled()) {
+                user.enable();
+            } else {
+                user.disable();
+            }
         }
 
         return UserMapper.toResponse(userRepository.save(user));
     }
+
 
     @Override
     @Transactional
@@ -145,6 +160,8 @@ public class UserServiceImpl implements UserService {
     /**
      * ADMIN ROLE MANAGEMENT (SEPARATE, EXPLICIT)
      */
+    @Override
+    @PreAuthorize("hasAuthority('USER_ROLE_ASSIGN')")
     @Transactional
     public UserResponseDto adminUpdateUserRoles(
             String userId,
@@ -170,6 +187,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @PreAuthorize("hasAuthority('USER_READ')")
     @Transactional
     public void deleteUser(String userId) {
         log.warn("Deleting user. userId={}", userId);

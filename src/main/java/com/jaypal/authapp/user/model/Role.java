@@ -12,6 +12,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(of = "type")
 public class Role {
 
     @Id
@@ -31,3 +32,4 @@ public class Role {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 }
+

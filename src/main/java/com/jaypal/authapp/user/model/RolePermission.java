@@ -3,6 +3,7 @@ package com.jaypal.authapp.user.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -17,6 +18,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(of = {"role", "permission"})
 public class RolePermission {
 
     @Id
@@ -24,10 +26,14 @@ public class RolePermission {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "role_id", nullable = false)
+    @JoinColumn(name = "role_id", nullable = false, updatable = false)
     private Role role;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "permission_id", nullable = false)
+    @JoinColumn(name = "permission_id", nullable = false, updatable = false)
     private Permission permission;
+
+    @Column(nullable = false, updatable = false)
+    private Instant assignedAt;
 }
+

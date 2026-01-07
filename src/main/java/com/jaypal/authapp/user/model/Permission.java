@@ -12,6 +12,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(of = "type")
 public class Permission {
 
     @Id
@@ -28,3 +29,4 @@ public class Permission {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 }
+

@@ -1,9 +1,6 @@
 package com.jaypal.authapp.user.application;
 
-import com.jaypal.authapp.user.dto.UserCreateRequest;
-import com.jaypal.authapp.user.dto.AdminUserUpdateRequest;
-import com.jaypal.authapp.user.dto.UserResponseDto;
-import com.jaypal.authapp.user.dto.UserUpdateRequest;
+import com.jaypal.authapp.user.dto.*;
 import com.jaypal.authapp.user.model.User;
 
 import java.util.List;
@@ -31,4 +28,6 @@ public interface UserService {
      * INTERNAL USE ONLY (Auth flows)
      */
     User createAndReturnDomainUser(UserCreateRequest request);
+
+    UserResponseDto adminUpdateUserRoles(String id, AdminUserRoleUpdateRequest req);
 }
