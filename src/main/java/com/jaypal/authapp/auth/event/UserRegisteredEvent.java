@@ -1,5 +1,5 @@
 package com.jaypal.authapp.auth.event;
 
-import com.jaypal.authapp.user.model.User;
+import java.util.UUID;
 
-public record UserRegisteredEvent(User user) {}
+public record UserRegisteredEvent(UUID userId) {}

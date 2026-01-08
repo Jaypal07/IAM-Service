@@ -47,6 +47,9 @@ public class User {
     @Column(nullable = false)
     private boolean enabled;
 
+    @Column(nullable = false)
+    private long permissionVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Provider provider;
@@ -79,6 +82,7 @@ public class User {
                 .id(id)
                 .email(email)
                 .password(password)
+                .permissionVersion(0L)
                 .name(name)
                 .enabled(false)
                 .provider(Provider.LOCAL)
@@ -104,6 +108,7 @@ public class User {
                 .name(name)
                 .image(image)
                 .enabled(true)
+                .permissionVersion(0L)
                 .provider(provider)
                 .providerId(providerId)
                 .createdAt(now)
@@ -149,4 +154,10 @@ public class User {
         if (image != null) this.image = image;
         this.updatedAt = Instant.now();
     }
+
+    public void bumpPermissionVersion() {
+        this.permissionVersion++;
+        this.updatedAt = Instant.now();
+    }
+
 }

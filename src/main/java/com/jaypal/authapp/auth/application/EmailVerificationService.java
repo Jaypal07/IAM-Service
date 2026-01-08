@@ -1,21 +1,25 @@
 package com.jaypal.authapp.auth.application;
 
-import com.jaypal.authapp.user.repository.EmailVerificationTokenRepository;
 import com.jaypal.authapp.auth.exception.EmailAlreadyVerifiedException;
 import com.jaypal.authapp.auth.exception.EmailNotRegisteredException;
 import com.jaypal.authapp.auth.exception.VerificationTokenExpiredException;
 import com.jaypal.authapp.auth.exception.VerificationTokenInvalidException;
-import com.jaypal.authapp.config.FrontendProperties;
 import com.jaypal.authapp.auth.infrastructure.email.EmailService;
+import com.jaypal.authapp.config.FrontendProperties;
 import com.jaypal.authapp.user.model.User;
 import com.jaypal.authapp.user.model.VerificationToken;
+import com.jaypal.authapp.user.repository.EmailVerificationTokenRepository;
 import com.jaypal.authapp.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EmailVerificationService {
 
     private final EmailVerificationTokenRepository tokenRepository;
@@ -25,10 +29,18 @@ public class EmailVerificationService {
 
     // ---------------- CREATE / RESEND ----------------
 
+    /**
+     * INTERNAL USE ONLY
+     * Called after registration commit or resend flow.
+     */
     @Transactional
-    public void createVerificationToken(User user) {
+    public void createVerificationToken(UUID userId) {
 
-        VerificationToken token = tokenRepository.findByUser(user)
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new IllegalStateException("User not found for verification"));
+
+        VerificationToken token = tokenRepository.findByUserId(userId)
                 .orElseGet(() -> new VerificationToken(user));
 
         token.regenerate();
@@ -38,7 +50,12 @@ public class EmailVerificationService {
                 frontendProperties.getBaseUrl()
                         + "/email-verify?token=" + token.getToken();
 
-        emailService.sendVerificationEmail(user.getEmail(), verifyLink);
+        emailService.sendVerificationEmail(
+                user.getEmail(),
+                verifyLink
+        );
+
+        log.info("Verification email sent. userId={}", userId);
     }
 
     /**
@@ -61,7 +78,7 @@ public class EmailVerificationService {
             throw new EmailAlreadyVerifiedException();
         }
 
-        createVerificationToken(user);
+        createVerificationToken(user.getId());
     }
 
     // ---------------- VERIFY ----------------
@@ -70,18 +87,24 @@ public class EmailVerificationService {
     public void verifyEmail(String tokenValue) {
 
         VerificationToken token = tokenRepository.findByToken(tokenValue)
-                .orElseThrow(VerificationTokenInvalidException::new
-                );
+                .orElseThrow(VerificationTokenInvalidException::new);
 
         if (token.isExpired()) {
             tokenRepository.delete(token);
             throw new VerificationTokenExpiredException();
         }
 
-        User user = token.getUser();
+        UUID userId = token.getUser().getId();
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new IllegalStateException("User missing during verification"));
+
         user.enable();
 
         tokenRepository.delete(token);
         userRepository.save(user);
+
+        log.info("Email verified. userId={}", userId);
     }
 }

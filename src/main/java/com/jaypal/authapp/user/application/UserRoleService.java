@@ -1,5 +1,6 @@
 package com.jaypal.authapp.user.application;
 
+import com.jaypal.authapp.token.application.RefreshTokenService;
 import com.jaypal.authapp.user.model.*;
 import com.jaypal.authapp.user.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ public class UserRoleService {
 
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
+    private final RefreshTokenService refreshTokenService;
 
     @Transactional
     public void assignRole(User user, RoleType roleType) {
@@ -29,6 +31,8 @@ public class UserRoleService {
                         .assignedAt(Instant.now())
                         .build()
         );
+        user.bumpPermissionVersion();
+        refreshTokenService.revokeAllForUser(user.getId());
     }
 
     @Transactional
@@ -37,5 +41,7 @@ public class UserRoleService {
                 .orElseThrow(() -> new IllegalStateException("Role not initialized"));
 
         userRoleRepository.deleteByUserAndRole(user, role);
+        user.bumpPermissionVersion();
+        refreshTokenService.revokeAllForUser(user.getId());
     }
 }

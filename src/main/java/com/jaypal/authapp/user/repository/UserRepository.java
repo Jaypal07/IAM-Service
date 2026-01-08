@@ -32,4 +32,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     """)
     Optional<User> findByIdWithRoles(UUID id);
 
+    @Query("""
+    select u.permissionVersion
+    from User u
+    where u.id = :userId
+    """)
+    Optional<Long> findPermissionVersionById(UUID userId);
+
+
 }

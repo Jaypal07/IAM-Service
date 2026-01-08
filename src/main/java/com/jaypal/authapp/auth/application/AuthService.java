@@ -2,23 +2,21 @@ package com.jaypal.authapp.auth.application;
 
 import com.jaypal.authapp.auth.dto.AuthLoginResult;
 import com.jaypal.authapp.auth.event.UserRegisteredEvent;
-import com.jaypal.authapp.user.model.PasswordResetToken;
-import com.jaypal.authapp.user.repository.PasswordResetTokenRepository;
-import com.jaypal.authapp.config.FrontendProperties;
-import com.jaypal.authapp.user.dto.UserCreateRequest;
+import com.jaypal.authapp.auth.exception.*;
 import com.jaypal.authapp.auth.infrastructure.email.EmailService;
-import com.jaypal.authapp.auth.exception.InvalidRefreshTokenException;
-import com.jaypal.authapp.auth.exception.AuthenticatedUserMissingException;
-import com.jaypal.authapp.auth.exception.PasswordPolicyViolationException;
-import com.jaypal.authapp.auth.exception.PasswordResetTokenExpiredException;
-import com.jaypal.authapp.auth.exception.PasswordResetTokenInvalidException;
+import com.jaypal.authapp.config.FrontendProperties;
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
-import com.jaypal.authapp.token.model.RefreshToken;
 import com.jaypal.authapp.token.application.RefreshTokenService;
-import com.jaypal.authapp.user.model.User;
-import com.jaypal.authapp.user.repository.UserRepository;
+import com.jaypal.authapp.token.model.RefreshToken;
+import com.jaypal.authapp.user.application.PermissionService;
 import com.jaypal.authapp.user.application.UserService;
+import com.jaypal.authapp.user.dto.UserCreateRequest;
+import com.jaypal.authapp.user.model.PasswordResetToken;
+import com.jaypal.authapp.user.model.PermissionType;
+import com.jaypal.authapp.user.model.User;
+import com.jaypal.authapp.user.repository.PasswordResetTokenRepository;
+import com.jaypal.authapp.user.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
@@ -30,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -40,6 +39,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenService refreshTokenService;
     private final JwtService jwtService;
+    private final PermissionService permissionService;
     private final UserService userService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -53,7 +53,7 @@ public class AuthService {
     @Transactional
     public void register(UserCreateRequest request) {
         User user = userService.createAndReturnDomainUser(request);
-        eventPublisher.publishEvent(new UserRegisteredEvent(user));
+        eventPublisher.publishEvent(new UserRegisteredEvent(user.getId()));
     }
 
     // ---------- LOGIN ----------
@@ -86,7 +86,7 @@ public class AuthService {
         Claims claims = parsed.getBody();
         UUID userId = UUID.fromString(claims.getSubject());
         String jti = claims.getId();
-        log.info("REFRESH JWT parsed. jti={}, userId={}", jti, userId);
+
         RefreshToken current =
                 refreshTokenService.validate(jti, userId);
 
@@ -96,11 +96,14 @@ public class AuthService {
                         jwtService.getRefreshTtlSeconds()
                 );
 
+        User user = current.getUser();
+        Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
+
         return new AuthLoginResult(
-                current.getUser(),
-                jwtService.generateAccessToken(current.getUser()),
+                user,
+                jwtService.generateAccessToken(user, permissions),
                 jwtService.generateRefreshToken(
-                        current.getUser(),
+                        user,
                         next.getJti()
                 ),
                 jwtService.getRefreshTtlSeconds()
@@ -116,7 +119,7 @@ public class AuthService {
         try {
             parsed = jwtService.parse(refreshJwt);
         } catch (JwtException ex) {
-            return; // idempotent logout
+            return;
         }
 
         if (!jwtService.isRefreshToken(parsed)) {
@@ -139,7 +142,6 @@ public class AuthService {
 
         refreshTokenService.revoke(jti, userId);
     }
-
 
     // ---------- EMAIL ----------
 
@@ -210,13 +212,14 @@ public class AuthService {
 
         userRepository.save(user);
         passwordResetTokenRepository.save(token);
-        // ✅ audit enrichment
         com.jaypal.authapp.audit.context.AuditContext.setEmail(user.getEmail());
     }
 
     // ---------- INTERNAL ----------
 
     private AuthLoginResult issueTokens(User user) {
+
+        Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
 
         RefreshToken refreshToken =
                 refreshTokenService.issue(
@@ -226,7 +229,7 @@ public class AuthService {
 
         return new AuthLoginResult(
                 user,
-                jwtService.generateAccessToken(user),
+                jwtService.generateAccessToken(user, permissions),
                 jwtService.generateRefreshToken(
                         user,
                         refreshToken.getJti()

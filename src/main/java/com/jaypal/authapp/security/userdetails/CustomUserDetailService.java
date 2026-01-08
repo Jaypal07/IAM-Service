@@ -36,12 +36,10 @@ public class CustomUserDetailService implements UserDetailsService {
 
         Set<GrantedAuthority> authorities = new HashSet<>();
 
-        // Roles
         user.getRoles().forEach(role ->
                 authorities.add(new SimpleGrantedAuthority(role))
         );
 
-        // Permissions
         permissionService.resolvePermissions(user.getId()).stream()
                 .map(Enum::name)
                 .map(SimpleGrantedAuthority::new)
@@ -56,4 +54,3 @@ public class CustomUserDetailService implements UserDetailsService {
         );
     }
 }
-

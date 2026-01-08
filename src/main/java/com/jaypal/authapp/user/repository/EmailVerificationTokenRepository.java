@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface EmailVerificationTokenRepository extends JpaRepository<VerificationToken, UUID> {
-    Optional<VerificationToken> findByUser(User user);
+
     Optional<VerificationToken> findByToken(String token);
+    Optional<VerificationToken> findByUserId(UUID userId);
+    void deleteByUser_Id(UUID userId);
 }

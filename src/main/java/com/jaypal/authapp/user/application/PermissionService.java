@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,4 +21,12 @@ public class PermissionService {
     public Set<PermissionType> resolvePermissions(UUID userId) {
         return permissionRepository.findPermissionTypesByUserId(userId);
     }
+
+    public String permissionHash(Set<PermissionType> permissions) {
+        return permissions.stream()
+                .map(Enum::name)
+                .sorted()
+                .collect(Collectors.joining("|"));
+    }
+
 }

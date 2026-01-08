@@ -1,5 +1,6 @@
 package com.jaypal.authapp.security.jwt;
 
+import com.jaypal.authapp.user.model.PermissionType;
 import com.jaypal.authapp.user.model.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
@@ -19,7 +20,9 @@ public class JwtService {
 
     private static final String CLAIM_EMAIL = "email";
     private static final String CLAIM_ROLES = "roles";
+    private static final String CLAIM_PERMS = "perms";
     private static final String CLAIM_TYPE = "typ";
+    private static final String CLAIM_PV = "pv";
 
     private final SecretKey secretKey;
     private final long accessTtlSeconds;
@@ -43,16 +46,24 @@ public class JwtService {
        TOKEN GENERATION
        ========================= */
 
-    public String generateAccessToken(User user) {
-        log.debug("Generating access token. userId={}", user.getId());
-
+    public String generateAccessToken(
+            User user,
+            Set<PermissionType> permissions
+    ) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_TYPE, TokenType.ACCESS.name().toLowerCase());
-        claims.put(CLAIM_ROLES, extractRoleNames(user));
+        claims.put(CLAIM_ROLES, new ArrayList<>(user.getRoles()));
+        claims.put(
+                CLAIM_PERMS,
+                permissions.stream()
+                        .map(Enum::name)
+                        .collect(Collectors.toList())
+        );
 
         if (user.getEmail() != null) {
             claims.put(CLAIM_EMAIL, user.getEmail());
         }
+        claims.put(CLAIM_PV, user.getPermissionVersion());
 
         return JwtUtils.buildToken(
                 secretKey,
@@ -64,8 +75,6 @@ public class JwtService {
     }
 
     public String generateRefreshToken(User user, String jti) {
-        log.debug("Generating refresh token. userId={}", user.getId());
-
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_TYPE, TokenType.REFRESH.name().toLowerCase());
 
@@ -109,28 +118,27 @@ public class JwtService {
         return claims.get(CLAIM_EMAIL, String.class);
     }
 
-    public List<String> extractRoles(Claims claims) {
-        Object raw = claims.get(CLAIM_ROLES);
-        if (raw == null) return List.of();
+    public Set<String> extractRoles(Claims claims) {
+        return extractStringSet(claims, CLAIM_ROLES);
+    }
+
+    public Set<String> extractPermissions(Claims claims) {
+        return extractStringSet(claims, CLAIM_PERMS);
+    }
+
+    public long extractPermissionVersion(Claims claims) {return claims.get(CLAIM_PV, Long.class);}
+
+    private Set<String> extractStringSet(Claims claims, String key) {
+        Object raw = claims.get(key);
+        if (raw == null) return Set.of();
 
         if (!(raw instanceof List<?> list)) {
-            throw new IllegalStateException("Invalid roles claim");
+            throw new IllegalStateException("Invalid claim: " + key);
         }
 
         return list.stream()
                 .map(String.class::cast)
-                .collect(Collectors.toUnmodifiableList());
-    }
-
-    /* =========================
-       INTERNAL HELPERS
-       ========================= */
-
-    private List<String> extractRoleNames(User user) {
-        if (user.getRoles() == null || user.getRoles().isEmpty()) {
-            return List.of();
-        }
-        return new ArrayList<>(user.getRoles());
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private void validateSecret(String secret) {
