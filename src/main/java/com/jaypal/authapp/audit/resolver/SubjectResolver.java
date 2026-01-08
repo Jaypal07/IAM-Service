@@ -2,7 +2,8 @@ package com.jaypal.authapp.audit.resolver;
 
 import com.jaypal.authapp.audit.annotation.AuthAudit;
 import com.jaypal.authapp.audit.context.AuditContext;
-import com.jaypal.authapp.audit.model.*;
+import com.jaypal.authapp.audit.domain.AuditSubjectType;
+import com.jaypal.authapp.audit.domain.HasEmail;
 import org.springframework.stereotype.Component;
 
 @Component

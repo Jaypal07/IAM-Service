@@ -1,7 +1,7 @@
 package com.jaypal.authapp.audit.annotation;
 
-import com.jaypal.authapp.audit.model.AuthAuditEvent;
-import com.jaypal.authapp.audit.model.AuditSubjectType;
+import com.jaypal.authapp.audit.domain.AuthAuditEvent;
+import com.jaypal.authapp.audit.domain.AuditSubjectType;
 
 import java.lang.annotation.*;
 

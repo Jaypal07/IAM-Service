@@ -1,7 +1,7 @@
 package com.jaypal.authapp.audit.validation;
 
-import com.jaypal.authapp.audit.model.AuthAuditEvent;
-import com.jaypal.authapp.audit.model.AuthFailureReason;
+import com.jaypal.authapp.audit.domain.AuthAuditEvent;
+import com.jaypal.authapp.audit.domain.AuthFailureReason;
 
 import java.util.*;
 

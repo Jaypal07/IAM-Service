@@ -1,7 +1,8 @@
 package com.jaypal.authapp.audit.resolver;
 
 import com.jaypal.authapp.audit.context.AuditContext;
-import com.jaypal.authapp.auth.dto.*;
+import com.jaypal.authapp.auth.dto.AuthLoginResult;
+import com.jaypal.authapp.auth.dto.TokenResponse;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.*;

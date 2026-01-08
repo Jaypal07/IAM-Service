@@ -1,5 +1,6 @@
 package com.jaypal.authapp.auth.dto;
-import com.jaypal.authapp.dto.UserResponseDto;
+
+import com.jaypal.authapp.user.dto.UserResponseDto;
 
 public record TokenResponse(
         String accessToken,

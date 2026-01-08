@@ -1,10 +1,16 @@
 package com.jaypal.authapp.audit.resolver;
 
-import com.jaypal.authapp.audit.model.AuthAuditEvent;
-import com.jaypal.authapp.audit.model.AuthFailureReason;
-import com.jaypal.authapp.exception.email.*;
-import com.jaypal.authapp.exception.refresh.*;
-import com.jaypal.authapp.exception.user.*;
+import com.jaypal.authapp.audit.domain.AuthAuditEvent;
+import com.jaypal.authapp.audit.domain.AuthFailureReason;
+import com.jaypal.authapp.auth.exception.*;
+import com.jaypal.authapp.auth.exception.InvalidRefreshTokenException;
+import com.jaypal.authapp.user.exception.EmailAlreadyExistsException;
+import com.jaypal.authapp.token.exception.RefreshTokenExpiredException;
+import com.jaypal.authapp.token.exception.RefreshTokenNotFoundException;
+import com.jaypal.authapp.token.exception.RefreshTokenUserMismatchException;
+import com.jaypal.authapp.auth.exception.PasswordPolicyViolationException;
+import com.jaypal.authapp.auth.exception.PasswordResetTokenExpiredException;
+import com.jaypal.authapp.auth.exception.PasswordResetTokenInvalidException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.*;
 import org.springframework.stereotype.Component;
