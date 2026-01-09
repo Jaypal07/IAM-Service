@@ -14,9 +14,11 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.net.URI;
 import java.time.Instant;
@@ -347,6 +349,23 @@ public class GlobalExceptionHandler {
     // ---------------------------------------------------------
     // FALLBACK
     // ---------------------------------------------------------
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResponseEntity<Map<String, Object>> handleNoResource(
+            Exception ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Internal server error",
+                "Resource not found.",
+                request,
+                "Unhandled exception",
+                ex,
+                true
+        );
+    }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(

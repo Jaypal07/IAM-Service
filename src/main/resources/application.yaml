@@ -5,4 +5,4 @@ spring:
   application:
     name: Auth-App-Backend
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}

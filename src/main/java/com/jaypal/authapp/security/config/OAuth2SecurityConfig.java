@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -22,6 +23,10 @@ import java.util.Map;
 @Configuration
 @RequiredArgsConstructor
 @Order(1)
+@ConditionalOnProperty(
+        prefix = "spring.security.oauth2.client.registration.google",
+        name = "client-id"
+)
 public class OAuth2SecurityConfig {
 
     private final AuthenticationSuccessHandler successHandler;

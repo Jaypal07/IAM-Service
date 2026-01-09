@@ -43,7 +43,7 @@ spring:
               - openid
               - profile
               - email
-#            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+          #            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
 
           github:
             client-id: ${GITHUB_CLIENT_ID}
@@ -51,7 +51,7 @@ spring:
             scope:
               - user:email
               - read:user
-#            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        #            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
 
         provider:
           google:
@@ -93,8 +93,4 @@ security:
     cookie-secure: ${JWT_COOKIE_SECURE:true}
     cookie-http-only: ${JWT_COOKIE_HTTP_ONLY:true}
     cookie-same-site: ${JWT_COOKIE_SAME_SITE:lax}
-    cookie-domain: ${JWT_COOKIE_DOMAIN:localhost}
-
-
-
-
+    cookie-domain: ${JWT_COOKIE_DOMAIN:localhost

@@ -1,0 +1,30 @@
+services:
+  auth-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth-api
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    container_name: auth-postgres
+    environment:
+      POSTGRES_DB: Auth-App
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
