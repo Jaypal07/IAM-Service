@@ -13,7 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.Serializable;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -37,7 +39,7 @@ public class AdminController {
 
     @PreAuthorize("hasAuthority('USER_READ')")
     @GetMapping("/{userId}")
-    public ResponseEntity<UserResponseDto> getUser(@PathVariable String userId) {
+    public ResponseEntity<UserResponseDto> getUser(@PathVariable UUID userId) {
         final UserResponseDto user = userService.getUserById(userId);
         return ResponseEntity.ok(user);
     }
@@ -45,7 +47,7 @@ public class AdminController {
     @PreAuthorize("hasAuthority('USER_UPDATE')")
     @PutMapping("/{userId}")
     public ResponseEntity<UserResponseDto> updateUser(
-            @PathVariable String userId,
+            @PathVariable UUID userId,
             @RequestBody @Valid AdminUserUpdateRequest request
     ) {
         final UserResponseDto user = userService.adminUpdateUser(userId, request);
@@ -58,7 +60,7 @@ public class AdminController {
     @PreAuthorize("hasAuthority('USER_ROLE_ASSIGN')")
     @PutMapping("/{userId}/roles")
     public ResponseEntity<UserResponseDto> updateUserRoles(
-            @PathVariable String userId,
+            @PathVariable UUID userId,
             @RequestBody @Valid AdminUserRoleUpdateRequest request
     ) {
         final UserResponseDto user = userService.adminUpdateUserRoles(userId, request);
@@ -70,8 +72,8 @@ public class AdminController {
 
     @PreAuthorize("hasAuthority('USER_DISABLE')")
     @DeleteMapping("/{userId}")
-    public ResponseEntity<Map<String, String>> deleteUser(@PathVariable String userId) {
-        userService.deleteUser(userId);
+    public ResponseEntity<Map<String, Serializable>> deleteUser(@PathVariable UUID userId) {
+        userService.deleteSelf(userId);
 
         log.info("Admin deleted user - ID: {}", userId);
 

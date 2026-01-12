@@ -33,5 +33,5 @@ public enum AuthAuditEvent {
     // ---------- ADMIN ----------
     ADMIN_USER_CREATED,
     ADMIN_USER_UPDATED,
-    ADMIN_USER_DELETED
+    TOKEN_INTROSPECTED, ADMIN_USER_DELETED
 }

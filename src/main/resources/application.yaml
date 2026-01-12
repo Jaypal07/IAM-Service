@@ -14,3 +14,6 @@ spring:
       tags:
         application: ${spring.application.name}
         environment: production
+  logging:
+    level:
+      root: DEBUG

@@ -1,5 +1,6 @@
 package com.jaypal.authapp.user.application;
 
+import com.jaypal.authapp.auth.exception.PasswordPolicyViolationException;
 import com.jaypal.authapp.user.dto.*;
 import com.jaypal.authapp.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.user.exception.ResourceNotFoundException;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -31,223 +33,197 @@ public class UserServiceImpl implements UserService {
     private final UserRoleService userRoleService;
     private final PermissionService permissionService;
 
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_PASSWORD_LENGTH = 128;
+    private static final Pattern PASSWORD_PATTERN =
+            Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$");
+
+    /* =====================
+       SELF-SERVICE
+       ===================== */
+
     @Override
     @Transactional
     public UserResponseDto createUser(UserCreateRequest req) {
-        Objects.requireNonNull(req, "User creation request cannot be null");
+        Objects.requireNonNull(req, "Request cannot be null");
+        validatePassword(req.password());
 
         try {
-            final User user = User.createLocal(
+            User user = User.createLocal(
                     req.email(),
                     passwordEncoder.encode(req.password()),
                     req.name()
             );
 
-            final User saved = userRepository.save(user);
+            User saved = userRepository.save(user);
             userProvisioningService.provisionNewUser(saved);
 
-            final User hydrated = requireUserWithRoles(saved.getId());
-            final Set<PermissionType> permissions = permissionService.resolvePermissions(hydrated.getId());
-
-            log.info("User created successfully - ID: {}, Email: {}", saved.getId(), maskEmail(saved.getEmail()));
-
-            return UserMapper.toResponse(hydrated, permissions);
+            return hydrate(saved);
 
         } catch (DataIntegrityViolationException ex) {
-            log.warn("User creation failed - duplicate email: {}", maskEmail(req.email()));
             throw new EmailAlreadyExistsException();
         }
     }
 
-    @Transactional
-    public User provisionOAuthUser(User oauthUser) {
-        Objects.requireNonNull(oauthUser, "OAuth user cannot be null");
-
-        final User saved = userRepository.save(oauthUser);
-        userProvisioningService.provisionNewUser(saved);
-
-        log.info("OAuth user provisioned - ID: {}, Provider: {}", saved.getId(), saved.getProvider());
-
-        return saved;
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponseDto getSelf(UUID userId) {
+        return hydrate(requireUser(userId));
     }
 
     @Override
     @Transactional
-    public User createAndReturnDomainUser(UserCreateRequest req) {
-        Objects.requireNonNull(req, "User creation request cannot be null");
+    public UserResponseDto updateSelf(UUID userId, UserUpdateRequest req) {
+        Objects.requireNonNull(req, "Update request cannot be null");
 
-        try {
-            final User user = User.createLocal(
-                    req.email(),
-                    passwordEncoder.encode(req.password()),
-                    req.name()
-            );
+        User user = requireUser(userId);
+        user.updateProfile(req.name(), req.image());
 
-            final User saved = userRepository.save(user);
-            userProvisioningService.provisionNewUser(saved);
-
-            log.info("Domain user created - ID: {}", saved.getId());
-
-            return saved;
-
-        } catch (DataIntegrityViolationException ex) {
-            log.warn("Domain user creation failed - duplicate email: {}", maskEmail(req.email()));
-            throw new EmailAlreadyExistsException();
+        if (req.password() != null && !req.password().isBlank()) {
+            validatePassword(req.password());
+            user.changePassword(passwordEncoder.encode(req.password()));
+            user.bumpPermissionVersion();
         }
+
+        userRepository.save(user);
+        return hydrate(user);
     }
+
+    @Override
+    @Transactional
+    public void deleteSelf(UUID userId) {
+        User user = requireUser(userId);
+        user.disable();
+        user.bumpPermissionVersion();
+        userRepository.save(user);
+        log.info("User self-disabled account: {}", userId);
+    }
+
+    /* =====================
+       ADMIN
+       ===================== */
 
     @Override
     @PreAuthorize("hasAuthority('USER_READ')")
     @Transactional(readOnly = true)
-    public UserResponseDto getUserById(String userId) {
-        Objects.requireNonNull(userId, "User ID cannot be null");
-
-        final User user = requireUserWithRoles(UUID.fromString(userId));
-        final Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
-
-        return UserMapper.toResponse(user, permissions);
+    public UserResponseDto getUserById(UUID userId) {
+        return hydrate(requireUser(userId));
     }
 
     @Override
     @PreAuthorize("hasAuthority('USER_READ')")
     @Transactional(readOnly = true)
     public UserResponseDto getUserByEmail(String email) {
-        Objects.requireNonNull(email, "Email cannot be null");
-
-        final User user = userRepository.findByEmailWithRoles(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + maskEmail(email)));
-
-        final Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
-
-        return UserMapper.toResponse(user, permissions);
-    }
-
-    @Override
-    @Transactional
-    public UserResponseDto updateUser(String userId, UserUpdateRequest req) {
-        Objects.requireNonNull(userId, "User ID cannot be null");
-        Objects.requireNonNull(req, "Update request cannot be null");
-
-        final User user = requireUserWithRoles(UUID.fromString(userId));
-
-        user.updateProfile(req.name(), req.image());
-
-        if (req.password() != null && !req.password().isBlank()) {
-            user.changePassword(passwordEncoder.encode(req.password()));
-            user.bumpPermissionVersion();
-        }
-
-        userRepository.save(user);
-
-        final Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
-
-        log.info("User profile updated - ID: {}", user.getId());
-
-        return UserMapper.toResponse(user, permissions);
+        User user = userRepository.findByEmailWithRoles(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return hydrate(user);
     }
 
     @Override
     @PreAuthorize("hasAuthority('USER_UPDATE')")
     @Transactional
-    public UserResponseDto adminUpdateUser(String userId, AdminUserUpdateRequest req) {
-        Objects.requireNonNull(userId, "User ID cannot be null");
-        Objects.requireNonNull(req, "Admin update request cannot be null");
+    public UserResponseDto adminUpdateUser(UUID userId, AdminUserUpdateRequest req) {
+        Objects.requireNonNull(req, "Admin request cannot be null");
 
-        final User user = requireUserWithRoles(UUID.fromString(userId));
+        User user = requireUser(userId);
 
         if (req.name() != null || req.image() != null) {
             user.updateProfile(req.name(), req.image());
         }
 
         if (req.enabled() != null) {
-            if (req.enabled()) {
-                user.enable();
-            } else {
-                user.disable();
-            }
+            if (req.enabled()) user.enable();
+            else user.disable();
+
+            user.bumpPermissionVersion();
         }
 
         userRepository.save(user);
-
-        final Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
-
-        log.info("User updated by admin - ID: {}, Enabled: {}", user.getId(), user.isEnabled());
-
-        return UserMapper.toResponse(user, permissions);
+        return hydrate(user);
     }
 
     @Override
     @PreAuthorize("hasAuthority('USER_ROLE_ASSIGN')")
     @Transactional
-    public UserResponseDto adminUpdateUserRoles(String userId, AdminUserRoleUpdateRequest req) {
-        Objects.requireNonNull(userId, "User ID cannot be null");
-        Objects.requireNonNull(req, "Role update request cannot be null");
+    public UserResponseDto adminUpdateUserRoles(UUID userId, AdminUserRoleUpdateRequest req) {
+        Objects.requireNonNull(req, "Role request cannot be null");
 
-        final User user = requireUserWithRoles(UUID.fromString(userId));
+        User user = requireUser(userId);
 
-        if (req.addRoles() != null && !req.addRoles().isEmpty()) {
-            req.addRoles().forEach(roleStr -> {
-                final RoleType roleType = RoleType.valueOf(roleStr);
-                userRoleService.assignRole(user, roleType);
-            });
+        if (req.addRoles() != null) {
+            req.addRoles().forEach(r ->
+                    userRoleService.assignRole(user, RoleType.valueOf(r)));
         }
 
-        if (req.removeRoles() != null && !req.removeRoles().isEmpty()) {
-            req.removeRoles().forEach(roleStr -> {
-                final RoleType roleType = RoleType.valueOf(roleStr);
-                userRoleService.removeRole(user, roleType);
-            });
+        if (req.removeRoles() != null) {
+            req.removeRoles().forEach(r ->
+                    userRoleService.removeRole(user, RoleType.valueOf(r)));
         }
 
-        final User refreshed = requireUserWithRoles(user.getId());
-        final Set<PermissionType> permissions = permissionService.resolvePermissions(refreshed.getId());
+        user.bumpPermissionVersion();
+        userRepository.save(user);
 
-        log.info("User roles updated by admin - ID: {}", user.getId());
-
-        return UserMapper.toResponse(refreshed, permissions);
+        return hydrate(user);
     }
 
     @Override
     @PreAuthorize("hasAuthority('USER_DISABLE')")
     @Transactional
-    public void deleteUser(String userId) {
-        Objects.requireNonNull(userId, "User ID cannot be null");
-
-        final User user = requireUserWithRoles(UUID.fromString(userId));
-        userRepository.delete(user);
-
-        log.info("User deleted - ID: {}", userId);
+    public void adminDisableUser(UUID userId) {
+        User user = requireUser(userId);
+        user.disable();
+        user.bumpPermissionVersion();
+        userRepository.save(user);
     }
 
-    private User requireUserWithRoles(UUID id) {
+    /* =====================
+       INTERNAL
+       ===================== */
+
+    @Override
+    @Transactional
+    public User createAndReturnDomainUser(UserCreateRequest req) {
+        validatePassword(req.password());
+
+        User user = User.createLocal(
+                req.email(),
+                passwordEncoder.encode(req.password()),
+                req.name()
+        );
+
+        User saved = userRepository.save(user);
+        userProvisioningService.provisionNewUser(saved);
+        return saved;
+    }
+
+    /* =====================
+       HELPERS
+       ===================== */
+
+    private User requireUser(UUID id) {
         return userRepository.findByIdWithRoles(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
-    private String maskEmail(String email) {
-        if (email == null || email.length() <= 3) {
-            return "***";
-        }
+    private UserResponseDto hydrate(User user) {
+        Set<PermissionType> perms = permissionService.resolvePermissions(user.getId());
+        return UserMapper.toResponse(user, perms);
+    }
 
-        final int atIndex = email.indexOf('@');
-        if (atIndex <= 0) {
-            return email.substring(0, 2) + "***";
+    private void validatePassword(String password) {
+        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
+            throw new PasswordPolicyViolationException("Password too short");
         }
-
-        return email.substring(0, Math.min(2, atIndex)) + "***" + email.substring(atIndex);
+        if (password.length() > MAX_PASSWORD_LENGTH) {
+            throw new PasswordPolicyViolationException("Password too long");
+        }
+        if (!PASSWORD_PATTERN.matcher(password).matches()) {
+            throw new PasswordPolicyViolationException(
+                    "Password must contain upper, lower, and digit"
+            );
+        }
+        if (password.contains(" ")) {
+            throw new PasswordPolicyViolationException("Password must not contain spaces");
+        }
     }
 }
-
-/*
-CHANGELOG:
-1. Added null checks for all method parameters
-2. Added explicit save() calls after updates (don't rely on dirty checking)
-3. Added comprehensive logging for all operations
-4. Added email masking to prevent PII exposure in logs
-5. Improved error messages with context
-6. Added user refresh after role updates to get latest state
-7. Made all UUID parsing explicit with proper error handling
-8. Added permission version bump on password change
-9. Removed code duplication in OAuth user creation
-10. Added final modifiers to all local variables
-*/

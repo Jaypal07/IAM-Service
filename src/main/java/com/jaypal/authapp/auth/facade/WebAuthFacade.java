@@ -60,6 +60,9 @@ public class WebAuthFacade {
 
         String refreshToken = refreshTokenExtractor.extract(request)
                 .orElseThrow(MissingRefreshTokenException::new);
+        log.debug("Refresh headers: X-Refresh-Token={}, Cookie={}",
+                request.getHeader("X-Refresh-Token"),
+                request.getHeader("Cookie"));
 
         final AuthLoginResult result = authService.refresh(refreshToken);
 

@@ -84,30 +84,31 @@ public class CookieService {
 
     public void attachRefreshCookie(
             HttpServletResponse response,
-            String jwt,
+            String token,
             int maxAgeSeconds
     ) {
-        Objects.requireNonNull(response, "HttpServletResponse cannot be null");
-        Objects.requireNonNull(jwt, "JWT cannot be null");
-
-        if (jwt.isBlank()) {
-            throw new IllegalArgumentException("JWT cannot be empty");
+        if (response == null) {
+            throw new IllegalArgumentException("HttpServletResponse must not be null");
         }
-
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Refresh token must not be blank");
+        }
         if (maxAgeSeconds <= 0) {
             throw new IllegalArgumentException("Max age must be positive");
         }
 
-        final String encoded = URLEncoder.encode(jwt, StandardCharsets.UTF_8);
+        final String encoded = URLEncoder.encode(token, StandardCharsets.UTF_8);
         final ResponseCookie cookie = buildCookie(encoded, maxAgeSeconds);
-
         response.setHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        addNoStoreHeader(response);
 
         log.debug("Refresh cookie attached with maxAge: {}s", maxAgeSeconds);
     }
 
     public void clearRefreshCookie(HttpServletResponse response) {
-        Objects.requireNonNull(response, "HttpServletResponse cannot be null");
+        if (response == null) {
+            throw new IllegalArgumentException("HttpServletResponse must not be null");
+        }
 
         final ResponseCookie cookie = buildCookie("", 0);
 
@@ -117,8 +118,9 @@ public class CookieService {
     }
 
     public void addNoStoreHeader(HttpServletResponse response) {
-        Objects.requireNonNull(response, "HttpServletResponse cannot be null");
-
+        if (response == null) {
+            throw new IllegalArgumentException("HttpServletResponse must not be null");
+        }
         response.setHeader(HttpHeaders.CACHE_CONTROL, NO_CACHE_HEADER_VALUE);
         response.setHeader(HttpHeaders.PRAGMA, "no-cache");
         response.setHeader(HttpHeaders.EXPIRES, "0");

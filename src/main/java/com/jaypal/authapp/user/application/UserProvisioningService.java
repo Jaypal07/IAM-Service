@@ -7,26 +7,26 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class UserProvisioningService {
 
     private final UserRoleService userRoleService;
 
     /**
      * Apply default IAM rules to a newly created user.
-     * Safe to call multiple times.
+     * Idempotent and safe for retries.
      */
     @Transactional
     public void provisionNewUser(User user) {
-        ensureDefaultRole(user);
-    }
+        Objects.requireNonNull(user, "User cannot be null");
 
-    private void ensureDefaultRole(User user) {
         if (user.getRoles().isEmpty()) {
             log.info("Assigning default ROLE_USER. userId={}", user.getId());
-            userRoleService.assignRole(user, RoleType.ROLE_USER);
+            userRoleService.assignRoleInternal(user, RoleType.ROLE_USER);
         }
     }
 }

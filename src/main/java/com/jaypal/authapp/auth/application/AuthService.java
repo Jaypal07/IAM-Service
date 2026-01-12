@@ -58,13 +58,16 @@ public class AuthService {
 
     @Transactional
     public void register(UserCreateRequest request) {
-        Objects.requireNonNull(request, "Registration request cannot be null");
+
+        if (request == null) {
+            throw new IllegalArgumentException("UserCreateRequest must not be null");
+        }
 
         validatePassword(request.password());
 
         final User user = userService.createAndReturnDomainUser(request);
 
-        log.info("User registered successfully - ID: {}", user.getId());
+        log.debug("User registered successfully - ID: {}", user.getId());
 
         eventPublisher.publishEvent(new UserRegisteredEvent(user.getId()));
     }
@@ -75,10 +78,7 @@ public class AuthService {
         Objects.requireNonNull(principal.getUserId(), "User ID cannot be null");
 
         final User user = userRepository.findById(principal.getUserId())
-                .orElseThrow(() -> {
-                    log.error("Authenticated user not found in database: {}", principal.getUserId());
-                    return new AuthenticatedUserMissingException();
-                });
+                .orElseThrow(AuthenticatedUserMissingException::new);
 
         if (!user.isEnabled()) {
             log.warn("Login attempt for disabled user: {}", user.getId());
@@ -94,11 +94,6 @@ public class AuthService {
     public AuthLoginResult refresh(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
             log.warn("Refresh attempt with null or blank token");
-            throw new InvalidRefreshTokenException();
-        }
-
-        if (rawRefreshToken.length() > 500) {
-            log.warn("Refresh token exceeds maximum length");
             throw new InvalidRefreshTokenException();
         }
 
@@ -122,7 +117,7 @@ public class AuthService {
 
         final Set<PermissionType> permissions = permissionService.resolvePermissions(userId);
 
-        log.info("Token refreshed successfully - User ID: {}", userId);
+        log.debug("Token refreshed successfully - User ID: {}", userId);
 
         return new AuthLoginResult(
                 user,
@@ -139,24 +134,36 @@ public class AuthService {
             return;
         }
 
-        if (rawRefreshToken.length() > 500) {
-            log.warn("Logout attempt with oversized token");
-            return;
-        }
-
         try {
             refreshTokenService.revoke(rawRefreshToken);
-            log.info("User logged out successfully");
+            log.debug("User logged out successfully");
         } catch (Exception ex) {
             log.warn("Logout revocation failed (token may be invalid): {}", ex.getMessage());
         }
     }
 
     @Transactional
-    public void verifyEmail(String token) {
-        Objects.requireNonNull(token, "Verification token cannot be null");
+    public void logoutAllSessions(UUID userId) {
+        Objects.requireNonNull(userId, "User ID cannot be null");
 
-        if (token.isBlank()) {
+        final User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("Logout-all failed. User not found: {}", userId);
+                    return new AuthenticatedUserMissingException();
+                });
+
+        user.bumpPermissionVersion();
+        refreshTokenService.revokeAllForUser(userId);
+
+        userRepository.save(user);
+
+        log.info("All sessions revoked for user: {}", userId);
+    }
+
+    @Transactional
+    public void verifyEmail(String token) {
+
+        if (token == null || token.isBlank()) {
             throw new VerificationTokenInvalidException();
         }
 
@@ -165,9 +172,8 @@ public class AuthService {
 
     @Transactional
     public void resendVerification(String email) {
-        Objects.requireNonNull(email, "Email cannot be null");
 
-        if (email.isBlank()) {
+        if (email == null || email.isBlank()) {
             log.warn("Resend verification called with blank email");
             return;
         }
@@ -181,10 +187,9 @@ public class AuthService {
 
     @Transactional
     public void initiatePasswordReset(String email) {
-        Objects.requireNonNull(email, "Email cannot be null");
 
-        if (email.isBlank()) {
-            log.debug("Password reset requested with blank email");
+        if (email == null || email.isBlank()) {
+            log.debug("Password reset requested with null or blank email");
             return;
         }
 
@@ -209,7 +214,7 @@ public class AuthService {
 
                     try {
                         emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
-                        log.info("Password reset email sent - User ID: {}", user.getId());
+                        log.debug("Password reset email sent - User ID: {}", user.getId());
                     } catch (Exception ex) {
                         log.error("Password reset email failed - User ID: {}", user.getId(), ex);
                     }
@@ -220,11 +225,11 @@ public class AuthService {
 
     @Transactional
     public void resetPassword(String tokenValue, String rawPassword) {
-        Objects.requireNonNull(tokenValue, "Reset token cannot be null");
-        Objects.requireNonNull(rawPassword, "New password cannot be null");
-
-        if (tokenValue.isBlank()) {
+        if (tokenValue == null || tokenValue.isBlank()) {
             throw new PasswordResetTokenInvalidException();
+        }
+        if (rawPassword == null) {
+            throw new IllegalArgumentException("Password must not be null");
         }
 
         validatePassword(rawPassword);
@@ -252,7 +257,7 @@ public class AuthService {
         userRepository.save(user);
         passwordResetTokenRepository.save(token);
 
-        log.info("Password reset successful - User ID: {}", user.getId());
+        log.debug("Password reset successful - User ID: {}", user.getId());
     }
 
     private AuthLoginResult issueTokens(User user) {

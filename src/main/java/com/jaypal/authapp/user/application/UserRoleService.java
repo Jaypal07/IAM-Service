@@ -7,13 +7,15 @@ import com.jaypal.authapp.user.model.*;
 import com.jaypal.authapp.user.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -22,24 +24,50 @@ public class UserRoleService {
 
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
-    private final PermissionService permissionService;
     private final RefreshTokenService refreshTokenService;
     private final AuthAuditService auditService;
+    private final CacheManager cacheManager;
 
     @Transactional
     public void assignRole(User user, RoleType roleType) {
         Objects.requireNonNull(user, "User cannot be null");
         Objects.requireNonNull(roleType, "Role type cannot be null");
 
-        final Role role = roleRepository.findByType(roleType)
+        assignRoleInternal(user, roleType);
+        registerPostCommitActions(user);
+    }
+
+    @Transactional
+    public void removeRole(User user, RoleType roleType) {
+        Objects.requireNonNull(user, "User cannot be null");
+        Objects.requireNonNull(roleType, "Role type cannot be null");
+
+        Role role = roleRepository.findByType(roleType)
+                .orElseThrow(() -> new IllegalStateException("Role not initialized: " + roleType));
+
+        userRoleRepository.deleteByUserAndRole(user, role);
+
+        user.bumpPermissionVersion();
+        auditRoleRemoval(user, roleType);
+
+        registerPostCommitActions(user);
+
+        log.info("Role removed: user={}, role={}", user.getId(), roleType);
+    }
+
+    /**
+     * INTERNAL USE ONLY
+     * Does NOT register post-commit hooks.
+     */
+    @Transactional
+    void assignRoleInternal(User user, RoleType roleType) {
+        Role role = roleRepository.findByType(roleType)
                 .orElseThrow(() -> new IllegalStateException("Role not initialized: " + roleType));
 
         if (userRoleRepository.existsByUserAndRole(user, role)) {
-            log.debug("Role already assigned - skipping: user={}, role={}", user.getId(), roleType);
+            log.debug("Role already assigned. user={}, role={}", user.getId(), roleType);
             return;
         }
-
-        final Set<PermissionType> permissionsBefore = permissionService.resolvePermissions(user.getId());
 
         userRoleRepository.save(
                 UserRole.builder()
@@ -50,39 +78,29 @@ public class UserRoleService {
         );
 
         user.bumpPermissionVersion();
-        permissionService.evictPermissionCache(user.getId());
-        refreshTokenService.revokeAllForUser(user.getId());
-
-        final Set<PermissionType> permissionsAfter = permissionService.resolvePermissions(user.getId());
-
         auditRoleAssignment(user, roleType);
-        auditPermissionDiff(user, permissionsBefore, permissionsAfter);
 
         log.info("Role assigned: user={}, role={}", user.getId(), roleType);
     }
 
-    @Transactional
-    public void removeRole(User user, RoleType roleType) {
-        Objects.requireNonNull(user, "User cannot be null");
-        Objects.requireNonNull(roleType, "Role type cannot be null");
+    private void registerPostCommitActions(User user) {
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        evictPermissionCache(user.getId());
+                        refreshTokenService.revokeAllForUser(user.getId());
+                    }
+                }
+        );
+    }
 
-        final Role role = roleRepository.findByType(roleType)
-                .orElseThrow(() -> new IllegalStateException("Role not initialized: " + roleType));
-
-        final Set<PermissionType> permissionsBefore = permissionService.resolvePermissions(user.getId());
-
-        userRoleRepository.deleteByUserAndRole(user, role);
-
-        user.bumpPermissionVersion();
-        permissionService.evictPermissionCache(user.getId());
-        refreshTokenService.revokeAllForUser(user.getId());
-
-        final Set<PermissionType> permissionsAfter = permissionService.resolvePermissions(user.getId());
-
-        auditRoleRemoval(user, roleType);
-        auditPermissionDiff(user, permissionsBefore, permissionsAfter);
-
-        log.info("Role removed: user={}, role={}", user.getId(), roleType);
+    private void evictPermissionCache(UUID userId) {
+        var cache = cacheManager.getCache("userPermissions");
+        if (cache != null) {
+            cache.evict(userId);
+            log.debug("Permission cache evicted after commit. userId={}", userId);
+        }
     }
 
     private void auditRoleAssignment(User user, RoleType roleType) {
@@ -108,51 +126,4 @@ public class UserRoleService {
                 null
         );
     }
-
-    private void auditPermissionDiff(
-            User user,
-            Set<PermissionType> before,
-            Set<PermissionType> after
-    ) {
-        final Set<PermissionType> added = new HashSet<>(after);
-        added.removeAll(before);
-
-        final Set<PermissionType> removed = new HashSet<>(before);
-        removed.removeAll(after);
-
-        for (PermissionType permission : added) {
-            auditService.record(
-                    AuditCategory.AUTHORIZATION,
-                    AuthAuditEvent.PERMISSION_GRANTED,
-                    AuditOutcome.SUCCESS,
-                    AuditSubject.userId(user.getId().toString()),
-                    null,
-                    AuthProvider.SYSTEM,
-                    null
-            );
-        }
-
-        for (PermissionType permission : removed) {
-            auditService.record(
-                    AuditCategory.AUTHORIZATION,
-                    AuthAuditEvent.PERMISSION_REVOKED,
-                    AuditOutcome.SUCCESS,
-                    AuditSubject.userId(user.getId().toString()),
-                    null,
-                    AuthProvider.SYSTEM,
-                    null
-            );
-        }
-    }
 }
-
-/*
-CHANGELOG:
-1. Added null checks for all method parameters
-2. Added permission cache eviction after role changes (CRITICAL)
-3. Added early return if role already assigned
-4. Added comprehensive logging for all operations
-5. Made error messages more descriptive
-6. Added final modifiers to local variables
-7. Used explicit permission cache eviction instead of relying on refresh
-*/

@@ -3,31 +3,45 @@ package com.jaypal.authapp.user.application;
 import com.jaypal.authapp.user.dto.*;
 import com.jaypal.authapp.user.model.User;
 
-import java.util.List;
+import java.util.UUID;
 
 public interface UserService {
 
+    /* =====================
+       PUBLIC SELF-SERVICE
+       ===================== */
+
     UserResponseDto createUser(UserCreateRequest request);
 
-    UserResponseDto getUserById(String userId);
+    UserResponseDto getSelf(UUID userId);
+
+    UserResponseDto updateSelf(UUID userId, UserUpdateRequest request);
+
+    void deleteSelf(UUID userId);
+
+    /* =====================
+       ADMIN OPERATIONS
+       ===================== */
+
+    UserResponseDto getUserById(UUID userId);
 
     UserResponseDto getUserByEmail(String email);
 
-//    List<UserResponseDto> getAllUsers();
-
-    UserResponseDto updateUser(String userId, UserUpdateRequest request);
-
     UserResponseDto adminUpdateUser(
-            String userId,
+            UUID userId,
             AdminUserUpdateRequest request
     );
 
-    void deleteUser(String userId);
+    UserResponseDto adminUpdateUserRoles(
+            UUID userId,
+            AdminUserRoleUpdateRequest request
+    );
 
-    /**
-     * INTERNAL USE ONLY (Auth flows)
-     */
+    void adminDisableUser(UUID userId);
+
+    /* =====================
+       INTERNAL (AUTH ONLY)
+       ===================== */
+
     User createAndReturnDomainUser(UserCreateRequest request);
-
-    UserResponseDto adminUpdateUserRoles(String id, AdminUserRoleUpdateRequest req);
 }
