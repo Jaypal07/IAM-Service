@@ -1,6 +1,6 @@
 package com.jaypal.authapp.user.application;
 
-import com.jaypal.authapp.auth.exception.PasswordPolicyViolationException;
+import com.jaypal.authapp.config.PasswordPolicy;
 import com.jaypal.authapp.user.dto.*;
 import com.jaypal.authapp.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.user.exception.ResourceNotFoundException;
@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -32,11 +31,7 @@ public class UserServiceImpl implements UserService {
     private final UserProvisioningService userProvisioningService;
     private final UserRoleService userRoleService;
     private final PermissionService permissionService;
-
-    private static final int MIN_PASSWORD_LENGTH = 8;
-    private static final int MAX_PASSWORD_LENGTH = 128;
-    private static final Pattern PASSWORD_PATTERN =
-            Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).+$");
+    private final PasswordPolicy passwordPolicy;
 
     /* =====================
        SELF-SERVICE
@@ -46,7 +41,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponseDto createUser(UserCreateRequest req) {
         Objects.requireNonNull(req, "Request cannot be null");
-        validatePassword(req.password());
+        passwordPolicy.validate(req.password());
 
         try {
             User user = User.createLocal(
@@ -80,7 +75,7 @@ public class UserServiceImpl implements UserService {
         user.updateProfile(req.name(), req.image());
 
         if (req.password() != null && !req.password().isBlank()) {
-            validatePassword(req.password());
+            passwordPolicy.validate(req.password());
             user.changePassword(passwordEncoder.encode(req.password()));
             user.bumpPermissionVersion();
         }
@@ -183,7 +178,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public User createAndReturnDomainUser(UserCreateRequest req) {
-        validatePassword(req.password());
+        passwordPolicy.validate(req.password());
 
         User user = User.createLocal(
                 req.email(),
@@ -210,20 +205,4 @@ public class UserServiceImpl implements UserService {
         return UserMapper.toResponse(user, perms);
     }
 
-    private void validatePassword(String password) {
-        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
-            throw new PasswordPolicyViolationException("Password too short");
-        }
-        if (password.length() > MAX_PASSWORD_LENGTH) {
-            throw new PasswordPolicyViolationException("Password too long");
-        }
-        if (!PASSWORD_PATTERN.matcher(password).matches()) {
-            throw new PasswordPolicyViolationException(
-                    "Password must contain upper, lower, and digit"
-            );
-        }
-        if (password.contains(" ")) {
-            throw new PasswordPolicyViolationException("Password must not contain spaces");
-        }
-    }
 }

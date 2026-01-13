@@ -93,17 +93,3 @@ public class SecurityBeansConfig {
         return mapper;
     }
 }
-
-/*
-CHANGELOG:
-1. Added @PostConstruct validation to fail fast on startup
-2. Moved frontend URL validation from CORS bean to startup validation
-3. Added URL format validation using java.net.URL
-4. Increased BCrypt strength from default (10) to 12 for better security
-5. Extracted HTTP methods and max age as constants
-6. Added exposed headers for common API response headers
-7. Added maxAge configuration for CORS preflight caching
-8. Added ObjectMapper bean for consistent JSON serialization
-9. Added comprehensive logging for security initialization
-10. Made validation error messages more actionable
-*/

@@ -5,6 +5,7 @@ import com.jaypal.authapp.auth.event.UserRegisteredEvent;
 import com.jaypal.authapp.auth.exception.*;
 import com.jaypal.authapp.auth.infrastructure.email.EmailService;
 import com.jaypal.authapp.config.FrontendProperties;
+import com.jaypal.authapp.config.PasswordPolicy;
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import com.jaypal.authapp.token.application.IssuedRefreshToken;
@@ -29,20 +30,13 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final int MIN_PASSWORD_LENGTH = 8;
-    private static final int MAX_PASSWORD_LENGTH = 128;
     private static final long PASSWORD_RESET_TTL_SECONDS = 900L;
-
-    private static final Pattern PASSWORD_PATTERN = Pattern.compile(
-            "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{" + MIN_PASSWORD_LENGTH + ",}$"
-    );
 
     private final UserRepository userRepository;
     private final RefreshTokenService refreshTokenService;
@@ -55,6 +49,7 @@ public class AuthService {
     private final FrontendProperties frontendProperties;
     private final EmailVerificationService emailVerificationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final PasswordPolicy passwordPolicy;
 
     @Transactional
     public void register(UserCreateRequest request) {
@@ -62,8 +57,6 @@ public class AuthService {
         if (request == null) {
             throw new IllegalArgumentException("UserCreateRequest must not be null");
         }
-
-        validatePassword(request.password());
 
         final User user = userService.createAndReturnDomainUser(request);
 
@@ -232,7 +225,7 @@ public class AuthService {
             throw new IllegalArgumentException("Password must not be null");
         }
 
-        validatePassword(rawPassword);
+        passwordPolicy.validate(rawPassword);
 
         final PasswordResetToken token = passwordResetTokenRepository
                 .findByToken(tokenValue)
@@ -276,47 +269,4 @@ public class AuthService {
         );
     }
 
-    private void validatePassword(String password) {
-        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
-            throw new PasswordPolicyViolationException(
-                    "Password must be at least " + MIN_PASSWORD_LENGTH + " characters"
-            );
-        }
-
-        if (password.length() > MAX_PASSWORD_LENGTH) {
-            throw new PasswordPolicyViolationException(
-                    "Password must not exceed " + MAX_PASSWORD_LENGTH + " characters"
-            );
-        }
-
-        if (!PASSWORD_PATTERN.matcher(password).matches()) {
-            throw new PasswordPolicyViolationException(
-                    "Password must contain uppercase, lowercase, and digit"
-            );
-        }
-
-        if (password.contains(" ")) {
-            throw new PasswordPolicyViolationException(
-                    "Password must not contain spaces"
-            );
-        }
-    }
 }
-
-/*
-CHANGELOG:
-1. Added comprehensive password validation (min/max length, complexity, no spaces)
-2. Added null checks for all public method parameters
-3. Added enabled check during login and refresh to prevent disabled user access
-4. Added token length validation (max 500 chars) to prevent overflow attacks
-5. Changed resendVerification to catch and swallow enumeration exceptions
-6. Added permission version bump on password reset (invalidates existing tokens)
-7. Delete expired reset token on validation failure
-8. Added comprehensive logging for security audit trail
-9. Extracted PASSWORD_RESET_TTL_SECONDS as constant
-10. Used String.format for URL construction instead of concatenation
-11. Changed ifPresent to ifPresentOrElse for better readability
-12. Made login and refresh methods check user.isEnabled()
-13. Added try-catch in logout to prevent exceptions from propagating
-14. Used PASSWORD_PATTERN compiled once instead of inline regex
-*/

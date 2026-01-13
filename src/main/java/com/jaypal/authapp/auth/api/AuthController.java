@@ -115,7 +115,7 @@ public class AuthController {
     ) {
         final Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.email(),
+                        request.email().toLowerCase().trim(),
                         request.password()
                 )
         );

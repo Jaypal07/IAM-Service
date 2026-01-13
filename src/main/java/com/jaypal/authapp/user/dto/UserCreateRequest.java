@@ -3,11 +3,16 @@ package com.jaypal.authapp.user.dto;
 import com.jaypal.authapp.audit.domain.HasEmail;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record UserCreateRequest(
         @NotBlank(message = "Email is required")
         @Email(message = "Email must be valid")
+        @Pattern(
+                regexp = "^(?!.*\\$).*$",
+                message = "Invalid email format"
+        )
         @Size(max = 255, message = "Email must not exceed 255 characters")
         String email,
 
@@ -17,6 +22,10 @@ public record UserCreateRequest(
 
         @NotBlank(message = "Name is required")
         @Size(min = 1, max = 255, message = "Name must be between 1 and 255 characters")
+        @Pattern(
+                regexp = "^[a-zA-Z0-9 _.-]{2,50}$",
+                message = "Name contains invalid characters"
+        )
         String name
 ) implements HasEmail {
     @Override

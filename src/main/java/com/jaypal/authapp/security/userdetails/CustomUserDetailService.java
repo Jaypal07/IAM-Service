@@ -1,5 +1,6 @@
 package com.jaypal.authapp.security.userdetails;
 
+import com.jaypal.authapp.auth.exception.EmailNotVerifiedException;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import com.jaypal.authapp.user.application.PermissionService;
 import com.jaypal.authapp.user.model.User;
@@ -47,7 +48,7 @@ public class CustomUserDetailService implements UserDetailsService {
 
         if (!user.isEmailVerified()) {
             log.warn("Login attempt for unverified user: {}", user.getId());
-            throw new DisabledException("Email not verified");
+            throw new EmailNotVerifiedException();
         }
 
         final Set<String> permissionNames = permissionService.resolvePermissions(user.getId())
@@ -86,18 +87,3 @@ public class CustomUserDetailService implements UserDetailsService {
         return email.substring(0, Math.min(2, atIndex)) + "***" + email.substring(atIndex);
     }
 }
-
-/*
-CHANGELOG:
-1. Added @Transactional(readOnly = true) to prevent lazy loading issues
-2. Added null and blank check for email input
-3. Added email masking in logs to prevent PII exposure
-4. Separated disabled account and unverified email checks
-5. Changed exception from UsernameNotFoundException to DisabledException for disabled accounts
-6. Added email verification check before authentication
-7. Added roles with ROLE_ prefix to authorities for Spring Security conventions
-8. Added comprehensive logging for security audit trail
-9. Used Set instead of List for authorities to prevent duplicates
-10. Added null check for email parameter
-11. Made authorities collection immutable with Collectors.toSet()
-*/

@@ -87,17 +87,3 @@ public class OAuth2SecurityConfig {
         }
     }
 }
-
-/*
-CHANGELOG:
-1. Injected ObjectMapper for consistent JSON serialization
-2. Added comprehensive logging for OAuth authentication failures
-3. Added ISO-8601 timestamp to error responses
-4. Added charset UTF-8 to prevent encoding issues
-5. Added flush() to ensure response is sent
-6. Wrapped error response writing in try-catch
-7. Made error response structure consistent with API security config
-8. Added path to error response for better debugging
-9. Used HttpStatus enum for status codes and reason phrases
-10. Removed redundant Map.of key-value pairs
-*/

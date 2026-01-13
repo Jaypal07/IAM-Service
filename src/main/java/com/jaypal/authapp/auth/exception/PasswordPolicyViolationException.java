@@ -4,6 +4,6 @@ import com.jaypal.authapp.shared.exception.DomainException;
 
 public class PasswordPolicyViolationException extends DomainException {
     public PasswordPolicyViolationException(String s) {
-        super("Password too short");
+        super(s);
     }
 }

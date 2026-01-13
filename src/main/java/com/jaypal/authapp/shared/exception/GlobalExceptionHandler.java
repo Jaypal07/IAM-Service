@@ -7,10 +7,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.*;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,18 +33,22 @@ public class GlobalExceptionHandler {
     private static final String CORRELATION_HEADER = "X-Correlation-Id";
     private static final String TYPE_ABOUT_BLANK = "about:blank";
 
+    /* =====================
+       CORE PROBLEM RESPONSE
+       ===================== */
+
     private ResponseEntity<Map<String, Object>> problem(
             HttpStatus status,
             String title,
             String detail,
             WebRequest request,
             String logMessage,
-            boolean logStackTrace
+            boolean serverError
     ) {
-        final String correlationId = UUID.randomUUID().toString();
+        final String correlationId = resolveCorrelationId(request);
         final String path = extractPath(request);
 
-        if (logStackTrace) {
+        if (serverError) {
             log.error("{} | correlationId={} | path={}", logMessage, correlationId, path);
         } else {
             log.warn("{} | correlationId={} | path={}", logMessage, correlationId, path);
@@ -64,46 +69,73 @@ public class GlobalExceptionHandler {
                 .body(body);
     }
 
-    private String extractPath(WebRequest request) {
-        if (request instanceof ServletWebRequest servletRequest) {
-            return servletRequest.getRequest().getRequestURI();
-        }
-        return "N/A";
-    }
+    /* =====================
+       AUTHORIZATION
+       ===================== */
 
     @ExceptionHandler({
-            BadCredentialsException.class,
-            InvalidCredentialsException.class,
-            UsernameNotFoundException.class
+            AccessDeniedException.class,
+            AuthorizationDeniedException.class
     })
-    public ResponseEntity<Map<String, Object>> handleInvalidCredentials(
-            Exception ex,
-            WebRequest request
-    ) {
-        return problem(
-                HttpStatus.UNAUTHORIZED,
-                "Authentication failed",
-                "Invalid email or password.",
-                request,
-                "Authentication failure: invalid credentials",
-                false
-        );
-    }
-
-    @ExceptionHandler({
-            DisabledException.class,
-            UserAccountDisabledException.class
-    })
-    public ResponseEntity<Map<String, Object>> handleAccountDisabled(
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(
             Exception ex,
             WebRequest request
     ) {
         return problem(
                 HttpStatus.FORBIDDEN,
+                "Access denied",
+                "You do not have permission to access this resource.",
+                request,
+                "Authorization failure: " + ex.getClass().getSimpleName(),
+                false
+        );
+    }
+
+    /* =====================
+       ACCOUNT / AUTH DOMAIN
+       ===================== */
+
+    @ExceptionHandler(AuthenticatedUserMissingException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthenticatedUserMissing(
+            AuthenticatedUserMissingException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.UNAUTHORIZED,
+                "Authentication context invalid",
+                "Authentication state is no longer valid. Please log in again.",
+                request,
+                "Authenticated user missing from database",
+                true
+        );
+    }
+
+    @ExceptionHandler(UserAccountDisabledException.class)
+    public ResponseEntity<Map<String, Object>> handleAccountDisabled(
+            UserAccountDisabledException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.FORBIDDEN,
                 "Account disabled",
+                "Your account has been disabled. Please contact support.",
+                request,
+                "Account disabled",
+                false
+        );
+    }
+
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<Map<String, Object>> handleEmailNotVerified(
+            EmailNotVerifiedException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.FORBIDDEN,
+                "Email not verified",
                 "Please verify your email address before logging in.",
                 request,
-                "Authentication failure: account disabled",
+                "Authentication failure: email not verified",
                 false
         );
     }
@@ -123,38 +155,9 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(AuthenticatedUserMissingException.class)
-    public ResponseEntity<Map<String, Object>> handleAuthenticatedUserMissing(
-            AuthenticatedUserMissingException ex,
-            WebRequest request
-    ) {
-        return problem(
-                HttpStatus.UNAUTHORIZED,
-                "Authentication context invalid",
-                "Authentication state is no longer valid. Please log in again.",
-                request,
-                "Authenticated user missing from database",
-                true
-        );
-    }
-
-    @ExceptionHandler({
-            AccessDeniedException.class,
-            AuthorizationDeniedException.class
-    })
-    public ResponseEntity<Map<String, Object>> handleAccessDenied(
-            Exception ex,
-            WebRequest request
-    ) {
-        return problem(
-                HttpStatus.FORBIDDEN,
-                "Access denied",
-                "You do not have permission to access this resource.",
-                request,
-                "Authorization failure: " + ex.getClass().getSimpleName(),
-                false
-        );
-    }
+    /* =====================
+       REGISTRATION / EMAIL
+       ===================== */
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<Map<String, Object>> handleEmailAlreadyExists(
@@ -177,7 +180,7 @@ public class GlobalExceptionHandler {
             WebRequest request
     ) {
         return problem(
-                HttpStatus.OK,
+                HttpStatus.CONFLICT,
                 "Email already verified",
                 "This email address is already verified.",
                 request,
@@ -206,9 +209,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(EmailNotRegisteredException.class)
     public ResponseEntity<Void> swallowEmailNotRegistered() {
-        log.debug("Email verification resend for non-existent email - responding with success");
+        log.debug("Email verification resend for non-existent email");
         return ResponseEntity.ok().build();
     }
+
+    /* =====================
+       PASSWORD / TOKENS
+       ===================== */
 
     @ExceptionHandler({
             PasswordPolicyViolationException.class,
@@ -251,6 +258,10 @@ public class GlobalExceptionHandler {
                 false
         );
     }
+
+    /* =====================
+       GENERIC / INFRA
+       ===================== */
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFound(
@@ -297,18 +308,18 @@ public class GlobalExceptionHandler {
             WebRequest request
     ) {
         final Throwable cause = ex.getCause();
-        if (cause instanceof org.hibernate.exception.ConstraintViolationException cve) {
-            if (cve.getConstraintName() != null &&
-                    cve.getConstraintName().toLowerCase().contains("email")) {
-                return problem(
-                        HttpStatus.CONFLICT,
-                        "Email already exists",
-                        "An account with this email address already exists.",
-                        request,
-                        "Duplicate email constraint violation",
-                        false
-                );
-            }
+        if (cause instanceof org.hibernate.exception.ConstraintViolationException cve &&
+                cve.getConstraintName() != null &&
+                cve.getConstraintName().toLowerCase().contains("email")) {
+
+            return problem(
+                    HttpStatus.CONFLICT,
+                    "Email already exists",
+                    "An account with this email address already exists.",
+                    request,
+                    "Duplicate email constraint violation",
+                    false
+            );
         }
 
         return problem(
@@ -316,7 +327,7 @@ public class GlobalExceptionHandler {
                 "Invalid request",
                 "Request violates data constraints.",
                 request,
-                "Data integrity violation: " + (cause != null ? cause.getClass().getSimpleName() : "unknown"),
+                "Data integrity violation",
                 true
         );
     }
@@ -336,6 +347,21 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleNotReadable(
+            HttpMessageNotReadableException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.BAD_REQUEST,
+                "Invalid request body",
+                "Malformed JSON or invalid field types.",
+                request,
+                "Request body deserialization failed",
+                false
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(
             Exception ex,
@@ -350,18 +376,25 @@ public class GlobalExceptionHandler {
                 true
         );
     }
-}
 
-/*
-CHANGELOG:
-1. Removed PII (exception details) from logs - only log exception class name
-2. Changed EmailAlreadyVerified status to 200 OK (not an error)
-3. Added ResourceNotFoundException handler
-4. Improved validation error response structure
-5. Added better constraint name matching for data integrity violations
-6. Extracted TYPE_ABOUT_BLANK as constant
-7. Removed unnecessary exception parameter from problem() method
-8. Added path to all log statements
-9. Made log messages more consistent
-10. Improved email enumeration protection in swallowEmailNotRegistered
-*/
+    /* =====================
+       HELPERS
+       ===================== */
+
+    private String extractPath(WebRequest request) {
+        if (request instanceof ServletWebRequest servletRequest) {
+            return servletRequest.getRequest().getRequestURI();
+        }
+        return "N/A";
+    }
+
+    private String resolveCorrelationId(WebRequest request) {
+        if (request instanceof ServletWebRequest swr) {
+            String existing = swr.getRequest().getHeader(CORRELATION_HEADER);
+            if (existing != null && !existing.isBlank()) {
+                return existing;
+            }
+        }
+        return UUID.randomUUID().toString();
+    }
+}
