@@ -105,7 +105,7 @@ public class AuthController {
 
     @AuthAudit(
             event = AuthAuditEvent.LOGIN,
-            subject = AuditSubjectType.USER_ID,
+            subject = AuditSubjectType.EMAIL,
             subjectParam = "request"
     )
     @PostMapping("/login")

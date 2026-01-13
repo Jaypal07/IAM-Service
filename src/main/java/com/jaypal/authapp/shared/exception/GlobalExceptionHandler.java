@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.net.URI;
@@ -94,6 +96,21 @@ public class GlobalExceptionHandler {
     /* =====================
        ACCOUNT / AUTH DOMAIN
        ===================== */
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> handleBadCredentials(
+            BadCredentialsException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.UNAUTHORIZED,
+                "Invalid credentials",
+                "The email or password you entered is incorrect.",
+                request,
+                "Authentication failure: invalid credentials",
+                false
+        );
+    }
 
     @ExceptionHandler(AuthenticatedUserMissingException.class)
     public ResponseEntity<Map<String, Object>> handleAuthenticatedUserMissing(
@@ -361,6 +378,71 @@ public class GlobalExceptionHandler {
                 false
         );
     }
+
+
+
+    @ExceptionHandler(InternalAuthenticationServiceException.class)
+    public ResponseEntity<Map<String, Object>> handleInternalAuthenticationServiceException(
+            InternalAuthenticationServiceException ex,
+            WebRequest request
+    ) {
+        Throwable cause = ex.getCause();
+
+        // ---- ACCOUNT DISABLED ----
+        if (cause instanceof DisabledException ||
+                cause instanceof UserAccountDisabledException) {
+
+            return problem(
+                    HttpStatus.FORBIDDEN,
+                    "Account disabled",
+                    "Your account has been disabled. Please contact support or verify you email",
+                    request,
+                    "Authentication failure: account disabled (wrapped)",
+                    false
+            );
+        }
+
+        // ---- ACCOUNT LOCKED ----
+        if (cause instanceof LockedException) {
+            return problem(
+                    HttpStatus.FORBIDDEN,
+                    "Account locked",
+                    "Your account is locked. Please contact support.",
+                    request,
+                    "Authentication failure: account locked (wrapped)",
+                    false
+            );
+        }
+
+        // ---- INVALID CREDENTIALS ----
+        if (cause instanceof BadCredentialsException) {
+            return problem(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid credentials",
+                    "The email or password you entered is incorrect.",
+                    request,
+                    "Authentication failure: invalid credentials (wrapped)",
+                    false
+            );
+        }
+
+        // ---- FALLBACK ----
+        log.error(
+                "Unhandled InternalAuthenticationServiceException cause: {}",
+                cause != null ? cause.getClass().getName() : "null",
+                ex
+        );
+
+        return problem(
+                HttpStatus.UNAUTHORIZED,
+                "Authentication failed",
+                "Authentication failed. Please try again.",
+                request,
+                "Authentication failure: internal service exception",
+                true
+        );
+    }
+
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(

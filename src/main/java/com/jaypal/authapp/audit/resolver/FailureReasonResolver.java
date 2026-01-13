@@ -12,7 +12,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -21,96 +23,116 @@ public class FailureReasonResolver {
     public AuthFailureReason resolve(Throwable ex) {
         Objects.requireNonNull(ex, "Exception cannot be null");
 
-        if (ex instanceof BadCredentialsException ||
-                ex instanceof InvalidCredentialsException ||
-                ex instanceof UsernameNotFoundException) {
+        Throwable root = unwrap(ex);
+
+        // ---- AUTHENTICATION ----
+        if (root instanceof BadCredentialsException ||
+                root instanceof InvalidCredentialsException ||
+                root instanceof UsernameNotFoundException) {
             return AuthFailureReason.INVALID_CREDENTIALS;
         }
 
-        if (ex instanceof DisabledException ||
-                ex instanceof UserAccountDisabledException) {
+        if (root instanceof DisabledException ||
+                root instanceof UserAccountDisabledException) {
             return AuthFailureReason.ACCOUNT_DISABLED;
         }
 
-        if (ex instanceof LockedException) {
+        if (root instanceof LockedException) {
             return AuthFailureReason.ACCOUNT_LOCKED;
         }
 
-        if (ex instanceof RefreshTokenExpiredException ||
-                ex instanceof PasswordResetTokenExpiredException ||
-                ex instanceof VerificationTokenExpiredException ||
-                ex instanceof CredentialsExpiredException) {
+        if (root instanceof CredentialsExpiredException) {
             return AuthFailureReason.TOKEN_EXPIRED;
         }
 
-        if (ex instanceof RefreshTokenRevokedException) {
+        // ---- TOKEN ----
+        if (root instanceof RefreshTokenExpiredException ||
+                root instanceof PasswordResetTokenExpiredException ||
+                root instanceof VerificationTokenExpiredException) {
+            return AuthFailureReason.TOKEN_EXPIRED;
+        }
+
+        if (root instanceof RefreshTokenRevokedException) {
             return AuthFailureReason.TOKEN_REVOKED;
         }
 
-        if (ex instanceof RefreshTokenNotFoundException ||
-                ex instanceof InvalidRefreshTokenException ||
-                ex instanceof PasswordResetTokenInvalidException ||
-                ex instanceof VerificationTokenInvalidException) {
+        if (root instanceof RefreshTokenNotFoundException ||
+                root instanceof InvalidRefreshTokenException ||
+                root instanceof PasswordResetTokenInvalidException ||
+                root instanceof VerificationTokenInvalidException) {
             return AuthFailureReason.TOKEN_INVALID;
         }
 
-        if (ex instanceof MissingRefreshTokenException) {
+        if (root instanceof MissingRefreshTokenException) {
             return AuthFailureReason.TOKEN_MISSING;
         }
 
-        if (ex instanceof EmailAlreadyExistsException ||
-                ex instanceof DataIntegrityViolationException) {
+        // ---- REGISTRATION / ACCOUNT ----
+        if (root instanceof EmailAlreadyExistsException ||
+                root instanceof DataIntegrityViolationException) {
             return AuthFailureReason.EMAIL_ALREADY_EXISTS;
         }
 
-        if (ex instanceof EmailAlreadyVerifiedException) {
+        if (root instanceof EmailAlreadyVerifiedException) {
             return AuthFailureReason.EMAIL_ALREADY_VERIFIED;
         }
 
-        if (ex instanceof EmailNotRegisteredException) {
+        if (root instanceof EmailNotRegisteredException) {
             return AuthFailureReason.EMAIL_NOT_REGISTERED;
         }
 
-        if (ex instanceof PasswordPolicyViolationException) {
+        if (root instanceof PasswordPolicyViolationException) {
             return AuthFailureReason.PASSWORD_POLICY_VIOLATION;
         }
 
-        if (ex instanceof PasswordResetTokenInvalidException) {
-            return AuthFailureReason.RESET_TOKEN_INVALID;
-        }
-
-        if (ex instanceof PasswordResetTokenExpiredException) {
-            return AuthFailureReason.RESET_TOKEN_EXPIRED;
-        }
-
-        if (ex instanceof AccessDeniedException) {
+        // ---- AUTHORIZATION ----
+        if (root instanceof AccessDeniedException) {
             return AuthFailureReason.ACCESS_DENIED;
         }
 
-        if (ex instanceof MethodArgumentNotValidException ||
-                ex instanceof IllegalArgumentException) {
+        // ---- VALIDATION ----
+        if (root instanceof MethodArgumentNotValidException ||
+                root instanceof IllegalArgumentException) {
             return AuthFailureReason.VALIDATION_FAILED;
         }
 
-        if (ex instanceof ResourceNotFoundException ||
-                ex instanceof AuthenticatedUserMissingException) {
+        // ---- NOT FOUND ----
+        if (root instanceof ResourceNotFoundException ||
+                root instanceof AuthenticatedUserMissingException) {
             return AuthFailureReason.USER_NOT_FOUND;
         }
 
-        log.warn("Unmapped exception type for audit: {}", ex.getClass().getName());
+        log.warn(
+                "Unmapped exception type for audit: {} (original: {})",
+                root.getClass().getName(),
+                ex.getClass().getName()
+        );
+
         return AuthFailureReason.SYSTEM_ERROR;
     }
-}
 
-/*
-CHANGELOG:
-1. Added comprehensive exception mapping for all IAM exceptions
-2. Added null check for exception parameter
-3. Grouped related exceptions together for clarity
-4. Added all token-related exceptions (refresh, password reset, verification)
-5. Added all authentication exceptions
-6. Added all authorization exceptions
-7. Added validation exceptions
-8. Improved logging for unmapped exceptions
-9. Made exception class name visible in logs for debugging
-*/
+    /**
+     * Unwraps Spring Security and nested exceptions safely.
+     */
+    private Throwable unwrap(Throwable ex) {
+        Set<Throwable> visited = new HashSet<>();
+        Throwable current = ex;
+
+        while (current != null &&
+                current.getCause() != null &&
+                !visited.contains(current)) {
+
+            visited.add(current);
+
+            // Spring Security wrapper
+            if (current instanceof InternalAuthenticationServiceException) {
+                current = current.getCause();
+                continue;
+            }
+
+            current = current.getCause();
+        }
+
+        return current != null ? current : ex;
+    }
+}
