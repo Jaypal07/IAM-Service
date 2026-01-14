@@ -5,8 +5,7 @@ import com.jaypal.authapp.token.exception.*;
 import com.jaypal.authapp.user.exception.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,14 +17,17 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import com.jaypal.authapp.security.ratelimit.RateLimitExceededException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 
 import java.net.URI;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -349,6 +351,21 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleRateLimit(
+            RateLimitExceededException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Too many requests",
+                "Too many requests. Please try again later.",
+                request,
+                "Rate limit exceeded",
+                false
+        );
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNoResource(
             NoResourceFoundException ex,
@@ -442,6 +459,58 @@ public class GlobalExceptionHandler {
                 true
         );
     }
+
+
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ProblemDetail> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex,
+            WebRequest request
+    ) {
+        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
+
+        String supportedMethods = (supported == null || supported.isEmpty())
+                ? "N/A"
+                : String.join(
+                ", ",
+                supported.stream().map(HttpMethod::name).toList()
+        );
+
+        String methodUsed = ex.getMethod();
+        String path = extractPath(request);
+        String correlationId = resolveCorrelationId(request);
+
+        // ✅ Clear prod log: METHOD → ALLOWED
+        log.warn(
+                "Method not supported | {} → {} | path={} | correlationId={}",
+                methodUsed,
+                supportedMethods,
+                path,
+                correlationId
+        );
+
+        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.METHOD_NOT_ALLOWED);
+        problem.setType(URI.create(TYPE_ABOUT_BLANK));
+        problem.setTitle("Method not allowed");
+        problem.setDetail(
+                "HTTP method '%s' is not supported for this endpoint. Supported methods: %s."
+                        .formatted(methodUsed, supportedMethods)
+        );
+        problem.setInstance(URI.create(path));
+        problem.setProperty("correlationId", correlationId);
+        problem.setProperty("timestamp", Instant.now().toString());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(CORRELATION_HEADER, correlationId);
+
+        // ✅ MUST be done here (mutable headers)
+        if (supported != null && !supported.isEmpty()) {
+            headers.setAllow(supported);
+        }
+
+        return new ResponseEntity<>(problem, headers, HttpStatus.METHOD_NOT_ALLOWED);
+    }
+
 
 
     @ExceptionHandler(Exception.class)

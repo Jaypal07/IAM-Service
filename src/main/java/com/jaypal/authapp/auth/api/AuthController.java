@@ -6,17 +6,16 @@ import com.jaypal.authapp.audit.domain.AuditSubjectType;
 import com.jaypal.authapp.auth.dto.*;
 import com.jaypal.authapp.auth.application.AuthService;
 import com.jaypal.authapp.auth.facade.WebAuthFacade;
-import com.jaypal.authapp.user.dto.UserCreateRequest;
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
+import com.jaypal.authapp.security.ratelimit.LoginRateLimiter;
+import com.jaypal.authapp.user.dto.UserCreateRequest;
 import com.jaypal.authapp.user.mapper.UserMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -41,6 +40,9 @@ public class AuthController {
     private final WebAuthFacade webAuthFacade;
     private final AuthService authService;
     private final JwtService jwtService;
+
+    // ✅ ADDED: rate limiter (no other fields changed)
+    private final LoginRateLimiter loginRateLimiter;
 
     @AuthAudit(
             event = AuthAuditEvent.REGISTER,
@@ -70,7 +72,9 @@ public class AuthController {
     )
     @GetMapping("/email-verify")
     public ResponseEntity<Map<String, String>> verifyEmail(
-            @RequestParam @NotBlank @Pattern(
+            @RequestParam
+            @NotBlank
+            @Pattern(
                     regexp = "^[0-9a-fA-F\\-]{36}$",
                     message = "Invalid verification token format"
             )
@@ -111,8 +115,13 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(
             @RequestBody @Valid LoginRequest request,
+            HttpServletRequest httpRequest,     // ✅ ADDED
             HttpServletResponse response
     ) {
+        // ✅ ADDED: rate limit check
+        String ip = httpRequest.getRemoteAddr();
+        loginRateLimiter.checkRateLimit(request.email(), ip);
+
         final Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.email().toLowerCase().trim(),
@@ -124,6 +133,9 @@ public class AuthController {
 
         final AuthPrincipal principal = (AuthPrincipal) authentication.getPrincipal();
         final AuthLoginResult result = webAuthFacade.login(principal, response);
+
+        // ✅ ADDED: reset counters on success
+        loginRateLimiter.recordSuccess(request.email(), ip);
 
         log.info("User logged in successfully - ID: {}", principal.getUserId());
 
@@ -228,18 +240,3 @@ public class AuthController {
         return email.substring(0, Math.min(2, atIndex)) + "***" + email.substring(atIndex);
     }
 }
-
-/*
-CHANGELOG:
-1. Added @Validated annotation for method-level validation
-2. Added @NotBlank and @Size constraints to token parameter
-3. Changed response messages to prevent email enumeration
-4. Added @Slf4j for comprehensive logging
-5. Changed all String responses to Map<String, String> for consistency
-6. Added HTTP 201 status for registration instead of default 200
-7. Added email masking in registration log
-8. Added final modifiers to method parameters
-9. Removed noContent() responses in favor of ok() with success messages
-10. Added explicit status codes using HttpStatus enum
-11. Changed logout response from void to success message
-*/
