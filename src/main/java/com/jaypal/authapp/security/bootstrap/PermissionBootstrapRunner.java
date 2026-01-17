@@ -37,7 +37,7 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
             log.info("=== IAM Permission Bootstrap Completed Successfully ===");
         } catch (Exception ex) {
             log.error("=== IAM Permission Bootstrap FAILED ===", ex);
-            throw new IllegalStateException("IAM bootstrap failed - application cannot start", ex);
+            throw new IllegalStateException("IAM bootstrap failed. Application cannot start", ex);
         }
     }
 
@@ -47,9 +47,7 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
         int created = 0;
 
         for (RoleType type : RoleType.values()) {
-            final Optional<Role> existing = roleRepository.findByType(type);
-
-            if (existing.isEmpty()) {
+            if (roleRepository.findByType(type).isEmpty()) {
                 roleRepository.save(Role.builder()
                         .name(type.name())
                         .type(type)
@@ -58,11 +56,11 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
                         .createdAt(now)
                         .build());
                 created++;
-                log.debug("Created role: {}", type);
+                log.debug("Created role {}", type);
             }
         }
 
-        log.info("Roles bootstrapped - Created: {}, Total: {}", created, RoleType.values().length);
+        log.info("Roles bootstrapped. Created={}, Total={}", created, RoleType.values().length);
     }
 
     private void bootstrapPermissions() {
@@ -71,24 +69,22 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
         int created = 0;
 
         for (PermissionType type : PermissionType.values()) {
-            final Optional<Permission> existing = permissionRepository.findByType(type);
-
-            if (existing.isEmpty()) {
+            if (permissionRepository.findByType(type).isEmpty()) {
                 permissionRepository.save(Permission.builder()
                         .type(type)
                         .description(getPermissionDescription(type))
                         .createdAt(now)
                         .build());
                 created++;
-                log.debug("Created permission: {}", type);
+                log.debug("Created permission {}", type);
             }
         }
 
-        log.info("Permissions bootstrapped - Created: {}, Total: {}", created, PermissionType.values().length);
+        log.info("Permissions bootstrapped. Created={}, Total={}", created, PermissionType.values().length);
     }
 
     private void bootstrapRolePermissions() {
-        log.info("Bootstrapping role-permission mappings...");
+        log.info("Bootstrapping role permission mappings...");
 
         final Role userRole = requireRole(RoleType.ROLE_USER);
         final Role adminRole = requireRole(RoleType.ROLE_ADMIN);
@@ -99,40 +95,44 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
         ));
 
         assignPermissions(adminRole, EnumSet.of(
+                PermissionType.USER_CREATE,
                 PermissionType.USER_READ,
                 PermissionType.USER_UPDATE,
                 PermissionType.USER_DISABLE,
                 PermissionType.USER_ROLE_ASSIGN,
+                PermissionType.ROLE_READ,
+                PermissionType.PERMISSION_READ,
+                PermissionType.TOKEN_REVOKE,
+                PermissionType.SESSION_TERMINATE,
                 PermissionType.AUDIT_READ
         ));
 
         assignPermissions(ownerRole, EnumSet.allOf(PermissionType.class));
 
-        log.info("Role-permission mappings bootstrapped");
+        log.info("Role permission mappings bootstrapped");
     }
 
     private void assignPermissions(Role role, Set<PermissionType> desiredPermissions) {
         Objects.requireNonNull(role, "Role cannot be null");
         Objects.requireNonNull(desiredPermissions, "Desired permissions cannot be null");
 
-        final Set<PermissionType> existingPermissions =
+        final Set<PermissionType> existing =
                 rolePermissionRepository.findPermissionTypesByRole(role);
 
-        final Set<PermissionType> missingPermissions = new HashSet<>(desiredPermissions);
-        missingPermissions.removeAll(existingPermissions);
+        final Set<PermissionType> missing = new HashSet<>(desiredPermissions);
+        missing.removeAll(existing);
 
-        if (missingPermissions.isEmpty()) {
-            log.debug("No new permissions to assign for role: {}", role.getType());
+        if (missing.isEmpty()) {
+            log.debug("No new permissions to assign for role {}", role.getType());
             return;
         }
 
         final Instant now = Instant.now();
-        final List<RolePermission> newMappings = missingPermissions.stream()
-                .map(permType -> {
-                    final Permission permission = permissionRepository.findByType(permType)
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "Permission not found during bootstrap: " + permType));
-
+        final List<RolePermission> mappings = missing.stream()
+                .map(type -> {
+                    Permission permission = permissionRepository.findByType(type)
+                            .orElseThrow(() ->
+                                    new IllegalStateException("Permission missing during bootstrap: " + type));
                     return RolePermission.builder()
                             .role(role)
                             .permission(permission)
@@ -141,15 +141,15 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
                 })
                 .collect(Collectors.toList());
 
-        rolePermissionRepository.saveAll(newMappings);
+        rolePermissionRepository.saveAll(mappings);
 
-        log.info("Assigned {} new permissions to role: {}", newMappings.size(), role.getType());
+        log.info("Assigned {} permissions to role {}", mappings.size(), role.getType());
     }
 
     private Role requireRole(RoleType type) {
         return roleRepository.findByType(type)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Role not found during bootstrap: " + type));
+                .orElseThrow(() ->
+                        new IllegalStateException("Role missing during bootstrap: " + type));
     }
 
     private String getRoleDescription(RoleType type) {
@@ -162,6 +162,7 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
 
     private String getPermissionDescription(PermissionType type) {
         return switch (type) {
+            case USER_CREATE -> "Create users";
             case USER_READ -> "Read user information";
             case USER_UPDATE -> "Update user information";
             case USER_DISABLE -> "Disable user accounts";
@@ -172,23 +173,8 @@ public class PermissionBootstrapRunner implements ApplicationRunner {
             case PERMISSION_MANAGE -> "Manage permissions";
             case TOKEN_REVOKE -> "Revoke tokens";
             case SESSION_TERMINATE -> "Terminate sessions";
+            case RATE_LIMIT_RESET -> "Reset rate limits";
             case AUDIT_READ -> "Read audit logs";
         };
     }
 }
-
-/*
-CHANGELOG:
-1. Changed exception handling from swallow to fail-fast on bootstrap failure
-2. Added @Order(1) to ensure bootstrap runs before other runners
-3. Added comprehensive logging with clear start/end markers
-4. Added counters to track created vs existing entities
-5. Added null checks in assignPermissions method
-6. Changed from orElseGet to explicit isEmpty check for clarity
-7. Added log.debug for individual entity creation
-8. Made error messages more descriptive with context
-9. Used Objects.requireNonNull for parameter validation
-10. Improved role and permission descriptions for better clarity
-11. Changed method names from defaultXDescription to getXDescription
-12. Added explicit return in assignPermissions when no work needed
-*/

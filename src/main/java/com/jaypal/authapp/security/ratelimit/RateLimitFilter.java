@@ -1,6 +1,8 @@
 package com.jaypal.authapp.security.ratelimit;
 
 import com.jaypal.authapp.config.JsonUtils;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,72 +14,88 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.net.URI;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private final InMemoryRateLimiter rateLimiter;
-    private static final String CORRELATION_HEADER = "X-Correlation-Id";
-    private static final String TYPE_ABOUT_BLANK = "about:blank";
+    private final RedisRateLimiter rateLimiter;
+    private final RateLimitProperties properties;
+    private final MeterRegistry meterRegistry;
 
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain
+            FilterChain chain
     ) throws ServletException, IOException {
 
-        String path = request.getRequestURI();
-        String ip = resolveClientIp(request);
+        String path = normalize(request.getRequestURI());
+        String method = request.getMethod();
+        String ip = RequestIpResolver.resolve(request);
 
-        int limit = RateLimitPolicy.limitFor(path);
-        long windowSeconds = RateLimitPolicy.WINDOW.toSeconds();
-        String key = path + ":" + ip;
+        // Hard bypass
+        if (path.startsWith("/actuator") || "/api/v1/auth/login".equals(path)) {
+            chain.doFilter(request, response);
+            return;
+        }
 
-        if (!rateLimiter.allow(key, limit, windowSeconds)) {
-            String correlationId = resolveCorrelationId(request);
+        if (CidrMatcher.matches(ip, properties.getInternalCidrs())) {
 
-            log.warn("Rate limit exceeded | path={} | ip={} | correlationId={}", path, ip, correlationId);
+            Counter.builder("auth.ratelimit.internal.bypass")
+                    .description("Requests bypassing rate limiting due to internal CIDR")
+                    .tag("endpoint", path)
+                    .tag("method", method)
+                    .register(meterRegistry)
+                    .increment();
 
-            Map<String, Object> body = new HashMap<>();
-            body.put("type", URI.create(TYPE_ABOUT_BLANK));
-            body.put("title", "Too many requests");
-            body.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
-            body.put("detail", "Too many requests. Please try again later.");
-            body.put("instance", path);
-            body.put("correlationId", correlationId);
-            body.put("timestamp", Instant.now().toString());
+            log.debug(
+                    "Internal traffic detected. Rate limit bypassed | ip={} path={}",
+                    ip,
+                    path
+            );
+            chain.doFilter(request, response);
+            return;
+        }
 
+        RateLimitProperties.Limit limit =
+                properties.getEndpoints().getOrDefault(
+                        path,
+                        properties.getEndpoints().get("default")
+                );
+
+        String key = "rl:ip:" + ip + ":" + path;
+
+        RateLimitContext ctx = new RateLimitContext(path, method, "ip");
+
+        boolean allowed = rateLimiter.allow(
+                key,
+                limit.getCapacity(),
+                limit.getRefillPerSecond(),
+                ctx
+        );
+
+        if (!allowed) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json");
-            response.setHeader(CORRELATION_HEADER, correlationId);
-            response.getWriter().write(JsonUtils.toJson(body)); // helper for converting map to JSON
-            return; // stop filter chain
+            response.getWriter().write(JsonUtils.toJson(Map.of(
+                    "status", 429,
+                    "error", "Too many requests",
+                    "timestamp", Instant.now().toString()
+            )));
+            return;
         }
 
-        filterChain.doFilter(request, response);
+        chain.doFilter(request, response);
     }
 
-    private String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0];
+    private String normalize(String path) {
+        if (path.endsWith("/") && path.length() > 1) {
+            return path.substring(0, path.length() - 1);
         }
-        return request.getRemoteAddr();
-    }
-
-    private String resolveCorrelationId(HttpServletRequest request) {
-        String existing = request.getHeader(CORRELATION_HEADER);
-        if (existing != null && !existing.isBlank()) {
-            return existing;
-        }
-        return UUID.randomUUID().toString();
+        return path;
     }
 }

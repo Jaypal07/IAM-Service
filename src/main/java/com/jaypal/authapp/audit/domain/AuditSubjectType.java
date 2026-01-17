@@ -4,5 +4,6 @@ public enum AuditSubjectType {
     USER_ID,
     EMAIL,
     SYSTEM,
+    IP,
     ANONYMOUS
 }

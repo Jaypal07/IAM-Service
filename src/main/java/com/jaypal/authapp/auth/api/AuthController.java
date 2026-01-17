@@ -3,14 +3,13 @@ package com.jaypal.authapp.auth.api;
 import com.jaypal.authapp.audit.annotation.AuthAudit;
 import com.jaypal.authapp.audit.domain.AuthAuditEvent;
 import com.jaypal.authapp.audit.domain.AuditSubjectType;
-import com.jaypal.authapp.auth.dto.*;
 import com.jaypal.authapp.auth.application.AuthService;
+import com.jaypal.authapp.auth.dto.*;
 import com.jaypal.authapp.auth.facade.WebAuthFacade;
 import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
-import com.jaypal.authapp.security.ratelimit.LoginRateLimiter;
+import com.jaypal.authapp.security.ratelimit.*;
 import com.jaypal.authapp.user.dto.UserCreateRequest;
-import com.jaypal.authapp.user.mapper.UserMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -40,9 +39,77 @@ public class AuthController {
     private final WebAuthFacade webAuthFacade;
     private final AuthService authService;
     private final JwtService jwtService;
+    private final RedisRateLimiter rateLimiter;
+    private final RateLimitProperties rateLimitProperties;
 
-    // ✅ ADDED: rate limiter (no other fields changed)
-    private final LoginRateLimiter loginRateLimiter;
+    @AuthAudit(
+            event = AuthAuditEvent.LOGIN,
+            subject = AuditSubjectType.EMAIL,
+            subjectParam = "request"
+    )
+    @PostMapping("/login")
+    public ResponseEntity<TokenResponse> login(
+            @RequestBody @Valid LoginRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response
+    ) {
+        final String email = request.email().toLowerCase().trim();
+        final String ip = RequestIpResolver.resolve(httpRequest);
+
+        final String emailKey = "rl:login:email:" + email;
+        final String ipKey = "rl:login:ip:" + ip;
+
+        RateLimitContext emailCtx = new RateLimitContext(
+                "/api/v1/auth/login",
+                "POST",
+                "email"
+        );
+
+        if (!rateLimiter.allow(
+                emailKey,
+                rateLimitProperties.getLoginEmail().getCapacity(),
+                rateLimitProperties.getLoginEmail().getRefillPerSecond(),
+                emailCtx
+        )) {
+            log.warn("Login blocked by email rate limit. emailHash={}", email.hashCode());
+            throw new RateLimitExceededException("Too many login attempts");
+        }
+
+        RateLimitContext ipCtx = new RateLimitContext(
+                "/api/v1/auth/login",
+                "POST",
+                "ip"
+        );
+
+        if (!rateLimiter.allow(
+                ipKey,
+                rateLimitProperties.getLoginIp().getCapacity(),
+                rateLimitProperties.getLoginIp().getRefillPerSecond(),
+                ipCtx
+        )) {
+            log.warn("Login blocked by IP rate limit. ip={}", ip);
+            throw new RateLimitExceededException("Too many login attempts");
+        }
+
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(email, request.password())
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        AuthPrincipal principal = (AuthPrincipal) authentication.getPrincipal();
+        AuthLoginResult result = webAuthFacade.login(principal, response);
+
+        log.info("Login successful. userId={} ip={}", principal.getUserId(), ip);
+
+        return ResponseEntity.ok(
+                TokenResponse.of(
+                        result.accessToken(),
+                        jwtService.getAccessTtlSeconds(),
+                        result.user()
+                )
+        );
+    }
 
     @AuthAudit(
             event = AuthAuditEvent.REGISTER,
@@ -54,21 +121,14 @@ public class AuthController {
             @RequestBody @Valid UserCreateRequest request
     ) {
         authService.register(request);
-
-        log.debug("Registration successful for email: {}", maskEmail(request.email()));
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(Map.of(
-                        "message", "Registration successful. Please verify your email.",
-                        "status", "success"
-                ));
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "message", "Registration successful. Please verify your email.",
+                "status", "success"
+        ));
     }
 
-    @AuthAudit(
-            event = AuthAuditEvent.EMAIL_VERIFY,
-            subject = AuditSubjectType.USER_ID
-    )
+    /* ===================== EMAIL VERIFICATION ===================== */
+
     @GetMapping("/email-verify")
     public ResponseEntity<Map<String, String>> verifyEmail(
             @RequestParam
@@ -80,147 +140,54 @@ public class AuthController {
             String token
     ) {
         authService.verifyEmail(token);
-
-        log.debug("Email verified successfully");
-
         return ResponseEntity.ok(Map.of(
                 "message", "Email verified successfully.",
                 "status", "success"
         ));
     }
 
-
-    @AuthAudit(
-            event = AuthAuditEvent.EMAIL_VERIFICATION_RESEND,
-            subject = AuditSubjectType.EMAIL,
-            subjectParam = "request"
-    )
-    @PostMapping("/resend-verification")
+    @PostMapping("/email-verify/resend")
     public ResponseEntity<Map<String, String>> resendVerification(
-            @RequestBody @Valid ResendVerificationRequest request
+            @RequestParam @NotBlank String email
     ) {
-        authService.resendVerification(request.email().toLowerCase().trim());
+        log.debug("Resend verification requested");
+        authService.resendVerification(email);
 
+        // Always return success to avoid user enumeration
         return ResponseEntity.ok(Map.of(
-                "message", "If your email is registered and unverified, a new verification email has been sent.",
+                "message", "If the email exists, a verification link has been sent.",
                 "status", "success"
         ));
     }
 
-    @AuthAudit(
-            event = AuthAuditEvent.LOGIN,
-            subject = AuditSubjectType.EMAIL,
-            subjectParam = "request"
-    )
-    @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(
-            @RequestBody @Valid LoginRequest request,
-            HttpServletRequest httpRequest,     // ✅ ADDED
-            HttpServletResponse response
+    /* ===================== PASSWORD RESET ===================== */
+
+    @PostMapping("/password-reset")
+    public ResponseEntity<Map<String, String>> initiatePasswordReset(
+            @RequestParam @NotBlank String email
     ) {
-        // ✅ ADDED: rate limit check
-        String ip = httpRequest.getRemoteAddr();
-        loginRateLimiter.checkRateLimit(request.email(), ip);
+        log.debug("Password reset initiation requested");
+        authService.initiatePasswordReset(email);
 
-        final Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.email().toLowerCase().trim(),
-                        request.password()
-                )
-        );
-
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-
-        final AuthPrincipal principal = (AuthPrincipal) authentication.getPrincipal();
-        final AuthLoginResult result = webAuthFacade.login(principal, response);
-
-        // ✅ ADDED: reset counters on success
-        loginRateLimiter.recordSuccess(request.email(), ip);
-
-        log.info("User logged in successfully - ID: {}", principal.getUserId());
-
-        return ResponseEntity.ok(
-                TokenResponse.of(
-                        result.accessToken(),
-                        jwtService.getAccessTtlSeconds(),
-                        UserMapper.toResponse(result.user())
-                )
-        );
-    }
-
-    @AuthAudit(
-            event = AuthAuditEvent.TOKEN_REFRESHED,
-            subject = AuditSubjectType.ANONYMOUS,
-            subjectParam = "request"
-    )
-    @PostMapping("/refresh")
-    public ResponseEntity<TokenResponse> refresh(
-            @RequestBody(required = false) RefreshTokenRequest body,
-            HttpServletRequest request,
-            HttpServletResponse response
-    ) {
-        final AuthLoginResult result = webAuthFacade.refresh(request, response, body);
-
-        log.debug("Token refreshed successfully - User ID: {}", result.user().getId());
-
-        return ResponseEntity.ok(
-                TokenResponse.of(
-                        result.accessToken(),
-                        jwtService.getAccessTtlSeconds(),
-                        UserMapper.toResponse(result.user())
-                )
-        );
-    }
-
-    @AuthAudit(
-            event = AuthAuditEvent.LOGOUT,
-            subject = AuditSubjectType.USER_ID,
-            subjectParam = "request"
-    )
-    @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout(
-            HttpServletRequest request,
-            HttpServletResponse response
-    ) {
-        webAuthFacade.logout(request, response);
-
-        log.debug("User logged out successfully");
-
+        // Always succeed to prevent user enumeration
         return ResponseEntity.ok(Map.of(
-                "message", "Logged out successfully.",
+                "message", "If the email exists, a password reset link has been sent.",
                 "status", "success"
         ));
     }
 
-    @AuthAudit(
-            event = AuthAuditEvent.PASSWORD_RESET_REQUEST,
-            subject = AuditSubjectType.EMAIL,
-            subjectParam = "request"
-    )
-    @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, String>> forgotPassword(
-            @RequestBody @Valid ForgotPasswordRequest request
-    ) {
-        authService.initiatePasswordReset(request.email().toLowerCase().trim());
-
-        return ResponseEntity.ok(Map.of(
-                "message", "If your email is registered, a password reset link has been sent.",
-                "status", "success"
-        ));
-    }
-
-    @AuthAudit(
-            event = AuthAuditEvent.PASSWORD_RESET_RESULT,
-            subject = AuditSubjectType.EMAIL,
-            subjectParam = "request"
-    )
-    @PostMapping("/reset-password")
+    @PostMapping("/password-reset/confirm")
     public ResponseEntity<Map<String, String>> resetPassword(
-            @RequestBody @Valid ResetPasswordRequest request
+            @RequestParam
+            @NotBlank
+            @Pattern(
+                    regexp = "^[0-9a-fA-F\\-]{36}$",
+                    message = "Invalid reset token format"
+            )
+            String token,
+            @RequestParam @NotBlank String password
     ) {
-        authService.resetPassword(request.token(), request.newPassword());
-
-        log.debug("Password reset successful");
+        authService.resetPassword(token, password);
 
         return ResponseEntity.ok(Map.of(
                 "message", "Password reset successful.",
@@ -228,16 +195,40 @@ public class AuthController {
         ));
     }
 
-    private String maskEmail(String email) {
-        if (email == null || email.length() <= 3) {
-            return "***";
+    @AuthAudit(
+            event = AuthAuditEvent.LOGOUT,
+            subject = AuditSubjectType.USER_ID,
+            subjectParam = "principal"
+    )
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout(
+            Authentication authentication,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "message", "Not authenticated",
+                    "status", "error"
+            ));
         }
 
-        final int atIndex = email.indexOf('@');
-        if (atIndex <= 0) {
-            return email.substring(0, 2) + "***";
-        }
+        AuthPrincipal principal = (AuthPrincipal) authentication.getPrincipal();
 
-        return email.substring(0, Math.min(2, atIndex)) + "***" + email.substring(atIndex);
+        webAuthFacade.logout(principal, request, response);
+
+        SecurityContextHolder.clearContext();
+
+        log.info(
+                "Logout successful. userId={} ip={}",
+                principal.getUserId(),
+                RequestIpResolver.resolve(request)
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Logout successful.",
+                "status", "success"
+        ));
     }
+
 }

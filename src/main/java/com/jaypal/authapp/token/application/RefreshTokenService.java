@@ -1,6 +1,6 @@
 package com.jaypal.authapp.token.application;
 
-import com.jaypal.authapp.security.ratelimit.RefreshTokenRateLimiter;
+import com.jaypal.authapp.security.ratelimit.*;
 import com.jaypal.authapp.token.exception.RefreshTokenExpiredException;
 import com.jaypal.authapp.token.exception.RefreshTokenNotFoundException;
 import com.jaypal.authapp.token.exception.RefreshTokenRevokedException;
@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,7 +30,9 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository repository;
     private final RefreshTokenHasher tokenHasher;
-    private final RefreshTokenRateLimiter refreshTokenRateLimiter;
+
+    private final RedisRateLimiter rateLimiter;
+    private final RateLimitProperties rateLimitProperties;
 
     /* =========================
        ISSUE TOKEN
@@ -37,15 +40,19 @@ public class RefreshTokenService {
 
     @Transactional
     public IssuedRefreshToken issue(UUID userId, long ttlSeconds) {
-        if (userId == null) throw new IllegalArgumentException("User ID must not be null");
-        if (ttlSeconds <= 0) throw new IllegalArgumentException("TTL must be positive");
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID must not be null");
+        }
+        if (ttlSeconds <= 0) {
+            throw new IllegalArgumentException("TTL must be positive");
+        }
 
         for (int attempt = 1; attempt <= MAX_ISSUE_ATTEMPTS; attempt++) {
             try {
                 return issueInternal(userId, ttlSeconds);
             } catch (DataIntegrityViolationException ex) {
                 log.warn(
-                        "Refresh token hash collision | retryAttempt={} userId={}",
+                        "Refresh token hash collision | attempt={} userId={}",
                         attempt,
                         userId
                 );
@@ -56,13 +63,17 @@ public class RefreshTokenService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    private IssuedRefreshToken issueInternal(UUID userId, long ttlSeconds) {
+    protected IssuedRefreshToken issueInternal(UUID userId, long ttlSeconds) {
         Instant now = Instant.now();
 
         String rawToken = RefreshTokenGenerator.generate();
         String tokenHash = tokenHasher.hash(rawToken);
 
-        log.debug("Issuing refresh token | userId={} hash={}", userId, tokenHash);
+        log.debug(
+                "Issuing refresh token | userId={} ttlSeconds={}",
+                userId,
+                ttlSeconds
+        );
 
         RefreshToken token = RefreshToken.issue(
                 tokenHash,
@@ -73,13 +84,13 @@ public class RefreshTokenService {
 
         repository.saveAndFlush(token);
 
+        enforceTokenLimit(userId);
+
         log.debug(
-                "Refresh token persisted | userId={} expiresAt={}",
+                "Refresh token issued | userId={} expiresAt={}",
                 userId,
                 token.getExpiresAt()
         );
-
-        enforceTokenLimit(userId);
 
         return new IssuedRefreshToken(rawToken, token.getExpiresAt());
     }
@@ -93,11 +104,14 @@ public class RefreshTokenService {
         String token = normalize(rawToken);
         String tokenHash = tokenHasher.hash(token);
 
-        log.debug("Validating refresh token | hash={}", tokenHash);
+        log.debug(
+                "Validating refresh token | hashPrefix={}",
+                tokenHash.substring(0, 8)
+        );
 
         RefreshToken stored = repository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> {
-                    log.warn("Refresh token not found | hash={}", tokenHash);
+                    log.warn("Refresh token not found");
                     return new RefreshTokenNotFoundException();
                 });
 
@@ -113,8 +127,8 @@ public class RefreshTokenService {
         }
 
         if (stored.isRevoked()) {
-            log.warn(
-                    "Refresh token revoked | userId={} rotated={}",
+            log.error(
+                    "Revoked refresh token used | userId={} rotated={}",
                     stored.getUserId(),
                     stored.wasRotated()
             );
@@ -130,7 +144,11 @@ public class RefreshTokenService {
             throw new RefreshTokenRevokedException();
         }
 
-        log.debug("Refresh token valid | userId={}", stored.getUserId());
+        log.debug(
+                "Refresh token valid | userId={}",
+                stored.getUserId()
+        );
+
         return stored;
     }
 
@@ -152,7 +170,7 @@ public class RefreshTokenService {
                 return rotateInternal(tokenId, ttlSeconds);
             } catch (ObjectOptimisticLockingFailureException ex) {
                 log.warn(
-                        "Optimistic lock conflict during refresh rotation | tokenId={} attempt={}",
+                        "Optimistic lock during refresh rotation | tokenId={} attempt={}",
                         tokenId,
                         attempt
                 );
@@ -172,10 +190,42 @@ public class RefreshTokenService {
         RefreshToken current = repository.findById(tokenId)
                 .orElseThrow(RefreshTokenNotFoundException::new);
 
-        // Rate limit AFTER reload
-        refreshTokenRateLimiter.check(current.getUserId());
+        RateLimitContext ctx = new RateLimitContext(
+                "/api/v1/auth/refresh",
+                "POST",
+                "refresh-rotate-user"
+        );
+
+        String key = "rl:refresh:rotate:user:" + current.getUserId();
+
+        log.debug(
+                "Applying refresh rotation rate limit | userId={} key={}",
+                current.getUserId(),
+                key
+        );
+
+        boolean allowed = rateLimiter.allow(
+                key,
+                rateLimitProperties.getRefreshRotate().getCapacity(),
+                rateLimitProperties.getRefreshRotate().getRefillPerSecond(),
+                ctx
+        );
+
+        if (!allowed) {
+            log.warn(
+                    "Refresh rotation rate limit exceeded | userId={} capacity={} refillPerSecond={}",
+                    current.getUserId(),
+                    rateLimitProperties.getRefreshRotate().getCapacity(),
+                    rateLimitProperties.getRefreshRotate().getRefillPerSecond()
+            );
+            throw new RateLimitExceededException("Too many refresh token attempts");
+        }
 
         if (!current.isActive(now)) {
+            log.warn(
+                    "Inactive refresh token rotation attempt | userId={}",
+                    current.getUserId()
+            );
             throw new RefreshTokenRevokedException();
         }
 
@@ -183,10 +233,10 @@ public class RefreshTokenService {
         String nextHash = tokenHasher.hash(nextRaw);
 
         log.debug(
-                "Rotating refresh token | userId={} oldHash={} newHash={}",
+                "Rotating refresh token | userId={} oldHashPrefix={} newHashPrefix={}",
                 current.getUserId(),
-                current.getTokenHash(),
-                nextHash
+                current.getTokenHash().substring(0, 8),
+                nextHash.substring(0, 8)
         );
 
         RefreshToken next = RefreshToken.issue(
@@ -202,7 +252,7 @@ public class RefreshTokenService {
         repository.saveAndFlush(current);
 
         log.debug(
-                "Refresh token rotation committed | userId={} newExpiresAt={}",
+                "Refresh token rotated | userId={} newExpiresAt={}",
                 current.getUserId(),
                 next.getExpiresAt()
         );
@@ -210,14 +260,15 @@ public class RefreshTokenService {
         return new IssuedRefreshToken(nextRaw, next.getExpiresAt());
     }
 
-
     /* =========================
        REVOKE TOKEN
        ========================= */
 
     @Transactional
     public void revoke(String rawToken) {
-        if (rawToken == null || rawToken.isBlank()) return;
+        if (rawToken == null || rawToken.isBlank()) {
+            return;
+        }
 
         String token = normalize(rawToken);
         String hash = tokenHasher.hash(token);
@@ -225,9 +276,8 @@ public class RefreshTokenService {
         repository.findByTokenHash(hash).ifPresent(tokenEntity -> {
             if (tokenEntity.isActive(Instant.now())) {
                 log.debug(
-                        "Revoking refresh token | userId={} hash={}",
-                        tokenEntity.getUserId(),
-                        hash
+                        "Revoking refresh token | userId={}",
+                        tokenEntity.getUserId()
                 );
                 tokenEntity.revoke(Instant.now());
                 repository.save(tokenEntity);
@@ -235,11 +285,23 @@ public class RefreshTokenService {
         });
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void revokeAllForUser(UUID userId) {
-        log.warn("Revoking ALL refresh tokens | userId={}", userId);
-        repository.revokeAllActiveByUserId(userId);
-        refreshTokenRateLimiter.reset(userId);
+        if (userId == null) {
+            return;
+        }
+        log.warn(
+                "Revoking all refresh tokens | userId={}",
+                userId
+        );
+
+        int revoked = repository.revokeAllActiveByUserId(userId);
+
+        log.info(
+                "All refresh tokens revoked after permission change | userId={} count={}",
+                userId,
+                revoked
+        );
     }
 
     /* =========================
@@ -253,7 +315,10 @@ public class RefreshTokenService {
         int deleted = repository.deleteByExpiresAtBefore(cutoff);
 
         if (deleted > 0) {
-            log.info("Expired refresh tokens cleaned | count={}", deleted);
+            log.info(
+                    "Expired refresh tokens cleaned | count={}",
+                    deleted
+            );
         }
     }
 
@@ -264,7 +329,9 @@ public class RefreshTokenService {
     private void enforceTokenLimit(UUID userId) {
         long active = repository.countByUserIdAndRevokedFalse(userId);
 
-        if (active <= MAX_TOKENS_PER_USER) return;
+        if (active <= MAX_TOKENS_PER_USER) {
+            return;
+        }
 
         int revokeCount = (int) (active - MAX_TOKENS_PER_USER);
 
@@ -279,7 +346,9 @@ public class RefreshTokenService {
     }
 
     private String normalize(String raw) {
-        if (raw == null) throw new RefreshTokenNotFoundException();
+        if (raw == null) {
+            throw new RefreshTokenNotFoundException();
+        }
 
         String token = raw.trim();
         if (token.startsWith("Bearer ")) {

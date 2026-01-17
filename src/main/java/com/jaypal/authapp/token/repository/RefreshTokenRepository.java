@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.awt.print.Pageable;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -22,47 +23,50 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     long countByUserIdAndRevokedFalse(UUID userId);
 
     @Query("""
-            SELECT rt FROM RefreshToken rt
-            WHERE rt.userId = :userId 
-            AND rt.revoked = false
-            AND rt.expiresAt > CURRENT_TIMESTAMP
-            ORDER BY rt.issuedAt ASC
-            LIMIT :limit
-            """)
+    SELECT rt FROM RefreshToken rt
+    WHERE rt.userId = :userId
+      AND rt.revoked = false
+      AND rt.expiresAt > CURRENT_TIMESTAMP
+    ORDER BY rt.issuedAt ASC
+    """)
     List<RefreshToken> findOldestActiveTokensByUserId(
             @Param("userId") UUID userId,
-            @Param("limit") int limit
+            Pageable pageable
     );
+
 
     @Modifying
     @Query("DELETE FROM RefreshToken rt WHERE rt.expiresAt < :cutoff")
     int deleteByExpiresAtBefore(@Param("cutoff") Instant cutoff);
 
-    @Modifying
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
-        update RefreshToken t
-        set t.revoked = true
-        where t.userId = :userId
-          and t.revoked = false
+    update RefreshToken t
+    set t.revoked = true
+    where t.userId = :userId
+      and t.revoked = false
     """)
     int revokeAllActiveByUserId(@Param("userId") UUID userId);
 
+
     @Modifying
     @Query(value = """
-        update refresh_tokens
-        set revoked = true
-        where id in (
-            select id from refresh_tokens
-            where user_id = :userId
-              and revoked = false
-            order by issued_at asc
-            limit :limit
-        )
+    update refresh_tokens
+    set revoked = true
+    where id in (
+        select id from refresh_tokens
+        where user_id = :userId
+          and revoked = false
+        order by issued_at asc
+        limit :limit
+    )
     """, nativeQuery = true)
     int revokeOldestActiveTokens(
             @Param("userId") UUID userId,
             @Param("limit") int limit
     );
+
 
 }
 

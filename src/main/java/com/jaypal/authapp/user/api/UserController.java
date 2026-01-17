@@ -26,13 +26,14 @@ public class UserController {
             @AuthenticationPrincipal AuthPrincipal principal
     ) {
         if (principal == null) {
+            log.debug("Unauthenticated request to GET /users/me");
             return ResponseEntity.status(401).build();
         }
 
-        UserResponseDto user =
-                userService.getUserById(principal.getUserId());
+        UUID userId = principal.getUserId();
+        log.debug("Fetching self profile. userId={}", userId);
 
-        return ResponseEntity.ok(user);
+        return ResponseEntity.ok(userService.getSelf(userId));
     }
 
     @PutMapping("/me")
@@ -41,16 +42,16 @@ public class UserController {
             @Valid @RequestBody UserUpdateRequest request
     ) {
         if (principal == null) {
+            log.debug("Unauthenticated request to PUT /users/me");
             return ResponseEntity.status(401).build();
         }
 
         UUID userId = principal.getUserId();
+        log.debug("Updating self profile. userId={}", userId);
 
-        UserResponseDto user =
-                userService.updateSelf(userId, request);
+        UserResponseDto user = userService.updateSelf(userId, request);
 
         log.info("User updated own profile. userId={}", userId);
-
         return ResponseEntity.ok(user);
     }
 
@@ -59,15 +60,15 @@ public class UserController {
             @AuthenticationPrincipal AuthPrincipal principal
     ) {
         if (principal == null) {
+            log.debug("Unauthenticated request to DELETE /users/me");
             return ResponseEntity.status(401).build();
         }
 
         UUID userId = principal.getUserId();
+        log.warn("User requested self delete. userId={}", userId);
 
         userService.deleteSelf(userId);
-
-        log.info("User deleted own account. userId={}", userId);
-
         return ResponseEntity.noContent().build();
     }
 }
+

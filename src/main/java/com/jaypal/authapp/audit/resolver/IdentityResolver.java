@@ -50,7 +50,7 @@ public class IdentityResolver {
             }
 
             if (result instanceof AuthLoginResult authLoginResult) {
-                return authLoginResult.user().getId();
+                return authLoginResult.user().id();
             }
 
             return null;

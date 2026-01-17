@@ -66,7 +66,7 @@ public class SubjectResolver {
 
     private AuditSubject extractSubject(AuditSubjectType type, Object value) {
         return switch (type) {
-            case EMAIL -> extractEmail(value);
+            case EMAIL, IP -> extractEmail(value);
             case USER_ID -> extractUserId(value);
             case ANONYMOUS, SYSTEM -> {
                 log.warn("Subject type {} should not require extraction", type);

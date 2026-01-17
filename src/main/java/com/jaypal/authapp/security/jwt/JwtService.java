@@ -191,20 +191,3 @@ public class JwtService {
                 .collect(Collectors.toUnmodifiableSet());
     }
 }
-
-/*
-CHANGELOG:
-1. Added @PostConstruct validation to fail fast on startup
-2. Increased minimum secret length validation to 64 characters
-3. Added null checks and validation for all inputs
-4. Added validation for TTL values (positive, refresh >= access)
-5. Added issuer validation
-6. Extracted constants for magic strings and numbers
-7. Added comprehensive logging on initialization
-8. Made extractStringSet defensive against null and non-string values
-9. Added explicit error messages for all validation failures
-10. Changed Set.of() to Collections.emptySet() for consistent null handling
-11. Stored raw secret separately for validation before key creation
-12. Added try-catch for UUID parsing with descriptive error
-13. Made collections immutable with Collectors.toUnmodifiableSet()
-*/

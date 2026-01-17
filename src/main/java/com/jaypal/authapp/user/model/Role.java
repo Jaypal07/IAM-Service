@@ -2,6 +2,7 @@ package com.jaypal.authapp.user.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -18,7 +19,8 @@ import java.util.UUID;
 public class Role {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue()
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     private UUID id;
 
     @Column(nullable = false, unique = true)

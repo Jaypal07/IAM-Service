@@ -1,8 +1,6 @@
 server:
   port: ${SERVER_PORT:8081}
   forward-headers-strategy: framework
-  ssl:
-    enabled: false
   shutdown: graceful
   error:
     include-message: never
@@ -14,6 +12,9 @@ spring:
   application:
     name: Auth-App-Backend
 
+  # ===============================
+  # DATABASE
+  # ===============================
   datasource:
     url: jdbc:postgresql://localhost:5432/Auth-App
     username: postgres
@@ -28,15 +29,17 @@ spring:
       max-lifetime: ${DB_MAX_LIFETIME:1800000}
       validation-timeout: ${DB_VALIDATION_TIMEOUT:5000}
       leak-detection-threshold: ${DB_LEAK_DETECTION_THRESHOLD:60000}
-      initialization-fail-timeout: -1
       auto-commit: false
       connection-test-query: SELECT 1
 
+  # ===============================
+  # JPA / HIBERNATE
+  # ===============================
   jpa:
-    hibernate:
-      ddl-auto: update
     open-in-view: false
     show-sql: false
+    hibernate:
+      ddl-auto: update
     properties:
       hibernate:
         default_schema: public
@@ -46,11 +49,32 @@ spring:
           fetch_size: 50
         order_inserts: true
         order_updates: true
-        query:
-          in_clause_parameter_padding: true
         connection:
           provider_disables_autocommit: true
 
+  # ===============================
+  # REDIS (REDIS CLOUD / SSL)
+  # ===============================
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-19112.c212.ap-south-1-1.ec2.cloud.redislabs.com}
+      port: ${REDIS_PORT:19112}
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD:wjibDGR1viNXtmDPIHHJtCANalZBP1Gw}
+      ssl:
+        enabled: false
+      timeout: 2s
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 200ms
+
+  # ===============================
+  # OAUTH2
+  # ===============================
   security:
     oauth2:
       client:
@@ -58,58 +82,54 @@ spring:
           google:
             client-id: ${GOOGLE_CLIENT_ID:}
             client-secret: ${GOOGLE_CLIENT_SECRET:}
-            scope:
-              - openid
-              - profile
-              - email
-
+            scope: openid,profile,email
           github:
             client-id: ${GITHUB_CLIENT_ID:}
             client-secret: ${GITHUB_CLIENT_SECRET:}
-            scope:
-              - user:email
-              - read:user
+            scope: user:email,read:user
 
-        provider:
-          google:
-            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
-            token-uri: https://oauth2.googleapis.com/token
-            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
-            user-name-attribute: sub
-
-          github:
-            authorization-uri: https://github.com/login/oauth/authorize
-            token-uri: https://github.com/login/oauth/access_token
-            user-info-uri: https://api.github.com/user
-            user-name-attribute: id
-
+  # ===============================
+  # MAIL
+  # ===============================
   mail:
     host: ${MAIL_HOST}
     port: ${MAIL_PORT}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     properties:
-      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
-      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
       mail.smtp.timeout: 5000
       mail.smtp.connectiontimeout: 5000
 
+  # ===============================
+  # CACHE (LOCAL)
+  # ===============================
   cache:
     type: caffeine
     caffeine:
       spec: maximumSize=10000,expireAfterWrite=900s
 
+  # ===============================
+  # TASK EXECUTION
+  # ===============================
   task:
     scheduling:
       pool:
         size: 2
 
+# ===============================
+# APPLICATION SETTINGS
+# ===============================
 app:
   frontend:
     base-url: ${FRONTEND_BASE_URL}
     success-redirect: ${FRONTEND_SUCCESS_REDIRECT:}
     failure-redirect: ${FRONTEND_FAILURE_REDIRECT:}
 
+# ===============================
+# JWT SECURITY
+# ===============================
 security:
   jwt:
     secret: ${JWT_SECRET}
@@ -118,52 +138,84 @@ security:
     refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:86400}
     refresh-token-cookie-name: ${JWT_REFRESH_COOKIE_NAME:refreshToken}
     cookie-secure: ${JWT_COOKIE_SECURE:true}
-    cookie-http-only: ${JWT_COOKIE_HTTP_ONLY:true}
-    cookie-same-site: ${JWT_COOKIE_SAME_SITE:Strict}
+    cookie-http-only: true
+    cookie-same-site: Strict
     cookie-domain: ${JWT_COOKIE_DOMAIN:}
 
+# ===============================
+# RATE LIMITING (REDIS-BACKED)
+# ===============================
+rate-limit:
+  endpoints:
+    default:
+      capacity: 100
+      refill-per-second: 1
+
+    # LOGIN is handled explicitly in controller
+    # DO NOT rely on filter for this
+    /api/v1/auth/login:
+      capacity: 3
+      refill-per-second: 0.00003   # ~1 token per 9 hours
+
+    /api/v1/auth/register:
+      capacity: 10
+      refill-per-second: 0.2
+
+    /api/v1/auth/forgot-password:
+      capacity: 10
+      refill-per-second: 0.1
+
+    /api/v1/auth/reset-password:
+      capacity: 10
+      refill-per-second: 0.1
+
+  # Per-email brute force
+  login-email:
+    capacity: 5
+    refill-per-second: 0.00002     # ~1 token per 14 hours
+
+  # Per-IP flood
+  login-ip:
+    capacity: 20
+    refill-per-second: 0.01        # ~1 token per 100s
+
+  # Invalid refresh abuse
+  invalid-refresh:
+    capacity: 10
+    refill-per-second: 0.05
+
+  # Refresh rotation abuse
+  refresh-rotate:
+    capacity: 5
+    refill-per-second: 0.02
+    internal-cidrs:
+      - 127.0.0.1/32
+      - ::1/128
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+
+
+
+# ===============================
+# LOGGING
+# ===============================
 logging:
   level:
     root: INFO
     org.springframework.security: WARN
-    org.hibernate.SQL: WARN
-    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.data.redis: DEBUG
+    io.lettuce.core: DEBUG
     com.jaypal.authapp: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics
-      base-path: /actuator
   endpoint:
-    health:
-      show-details: when-authorized
-  metrics:
-    export:
-      simple:
-        enabled: true
+    metrics:
+      enabled: true
 
-#  /*
-#PRODUCTION IMPROVEMENTS:
-#  1. Increased HikariCP pool size (5 → 20) for production load
-#  2. Increased minimum idle (2 → 5) for better connection availability
-#  3. Enabled leak detection (60 seconds threshold)
-#  4. Added connection test query for health checks
-#  5. Changed ddl-auto from update to validate (safer for production)
-#  6. Disabled show-sql (performance + security)
-#7. Enabled Hibernate batch operations (batch_size: 20)
-#8. Added JDBC fetch size optimization (fetch_size: 50)
-#  9. Enabled order_inserts and order_updates for batching
-#  10. Added mail timeouts to prevent hanging
-#  11. Configured Caffeine cache properly
-#  12. Added scheduling pool for cleanup jobs
-#  13. Changed SameSite from Lax to Strict for production security
-#  14. Disabled error stack traces in responses (security)
-#  15. Added graceful shutdown
-#  16. Configured actuator endpoints for monitoring
-#  17. Added proper logging patterns
-#  */
+
+

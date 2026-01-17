@@ -10,10 +10,13 @@ import com.jaypal.authapp.security.jwt.JwtService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
 import com.jaypal.authapp.token.application.IssuedRefreshToken;
 import com.jaypal.authapp.token.application.RefreshTokenService;
+import com.jaypal.authapp.token.exception.RefreshTokenNotFoundException;
 import com.jaypal.authapp.token.model.RefreshToken;
 import com.jaypal.authapp.user.application.PermissionService;
 import com.jaypal.authapp.user.application.UserService;
 import com.jaypal.authapp.user.dto.UserCreateRequest;
+import com.jaypal.authapp.user.dto.UserResponseDto;
+import com.jaypal.authapp.user.mapper.UserMapper;
 import com.jaypal.authapp.user.model.PasswordResetToken;
 import com.jaypal.authapp.user.model.PermissionType;
 import com.jaypal.authapp.user.model.User;
@@ -53,32 +56,35 @@ public class AuthService {
 
     @Transactional
     public void register(UserCreateRequest request) {
+        Objects.requireNonNull(request, "UserCreateRequest must not be null");
 
-        if (request == null) {
-            throw new IllegalArgumentException("UserCreateRequest must not be null");
-        }
+        log.debug("Registration requested. email={}", request.email());
 
-        final User user = userService.createAndReturnDomainUser(request);
+        UserResponseDto user = userService.createUser(request);
 
-        log.debug("User registered successfully - ID: {}", user.getId());
+        log.info("User registered successfully. userId={}", user.id());
 
-        eventPublisher.publishEvent(new UserRegisteredEvent(user.getId()));
+        eventPublisher.publishEvent(new UserRegisteredEvent(user.id()));
+        log.debug("UserRegisteredEvent published. userId={}", user.id());
     }
 
-    @Transactional()
+    @Transactional
     public AuthLoginResult login(AuthPrincipal principal) {
         Objects.requireNonNull(principal, "Principal cannot be null");
         Objects.requireNonNull(principal.getUserId(), "User ID cannot be null");
 
-        final User user = userRepository.findById(principal.getUserId())
+        UUID userId = principal.getUserId();
+        log.debug("Login invoked. userId={}", userId);
+
+        User user = userRepository.findById(userId)
                 .orElseThrow(AuthenticatedUserMissingException::new);
 
         if (!user.isEnabled()) {
-            log.warn("Login attempt for disabled user: {}", user.getId());
+            log.warn("Login blocked for disabled user. userId={}", userId);
             throw new AuthenticatedUserMissingException();
         }
 
-        log.info("User logged in successfully - ID: {}", user.getId());
+        log.info("User logged in successfully. userId={}", userId);
 
         return issueTokens(user);
     }
@@ -86,34 +92,40 @@ public class AuthService {
     @Transactional
     public AuthLoginResult refresh(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
-            log.warn("Refresh attempt with null or blank token");
-            throw new InvalidRefreshTokenException("Refresh token too long");
+            log.warn("Refresh attempted with blank token");
+            throw new InvalidRefreshTokenException("Refresh token is invalid");
         }
 
-        final RefreshToken current = refreshTokenService.validate(rawRefreshToken);
-        final IssuedRefreshToken next = refreshTokenService.rotate(
+        RefreshToken current = refreshTokenService.validate(rawRefreshToken);
+        IssuedRefreshToken next = refreshTokenService.rotate(
                 current.getId(),
                 jwtService.getRefreshTtlSeconds()
         );
 
-        final UUID userId = current.getUserId();
-        final User user = userRepository.findById(userId)
+        UUID userId = current.getUserId();
+
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.error("User not found during token refresh: {}", userId);
+                    log.error("Refresh failed. User not found. userId={}", userId);
                     return new AuthenticatedUserMissingException();
                 });
 
         if (!user.isEnabled()) {
-            log.warn("Token refresh attempted for disabled user: {}", userId);
+            log.warn("Refresh blocked for disabled user. userId={}", userId);
             throw new AuthenticatedUserMissingException();
         }
 
-        final Set<PermissionType> permissions = permissionService.resolvePermissions(userId);
+        Set<PermissionType> permissions = permissionService.resolvePermissions(userId);
 
-        log.debug("Token refreshed successfully - User ID: {}", userId);
+        log.debug(
+                "Refresh successful. userId={} permissions={} permVersion={}",
+                userId,
+                permissions.size(),
+                user.getPermissionVersion()
+        );
 
         return new AuthLoginResult(
-                user,
+                UserMapper.toResponse(user, permissions),
                 jwtService.generateAccessToken(user, permissions),
                 next.token(),
                 next.expiresAt().getEpochSecond()
@@ -123,67 +135,76 @@ public class AuthService {
     @Transactional
     public void logout(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
-            log.debug("Logout called with null/blank token - no action taken");
+            log.debug("Logout called without refresh token");
             return;
         }
 
         try {
             refreshTokenService.revoke(rawRefreshToken);
-            log.debug("User logged out successfully");
+            log.debug("Refresh token revoked");
+        } catch (RefreshTokenNotFoundException ex) {
+            log.debug("Refresh token already revoked or expired");
         } catch (Exception ex) {
-            log.warn("Logout revocation failed (token may be invalid): {}", ex.getMessage());
+            log.warn(
+                    "Unexpected error during refresh token revoke | type={} message={}",
+                    ex.getClass().getSimpleName(),
+                    ex.getMessage()
+            );
         }
     }
+
 
     @Transactional
     public void logoutAllSessions(UUID userId) {
         Objects.requireNonNull(userId, "User ID cannot be null");
 
-        final User user = userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
-                    log.error("Logout-all failed. User not found: {}", userId);
+                    log.error("Logout-all failed. User not found. userId={}", userId);
                     return new AuthenticatedUserMissingException();
                 });
 
         user.bumpPermissionVersion();
         refreshTokenService.revokeAllForUser(userId);
-
         userRepository.save(user);
 
-        log.info("All sessions revoked for user: {}", userId);
+        log.info(
+                "All sessions revoked. userId={} permVersion={}",
+                userId,
+                user.getPermissionVersion()
+        );
     }
 
     @Transactional
     public void verifyEmail(String token) {
-
         if (token == null || token.isBlank()) {
             throw new VerificationTokenInvalidException();
         }
 
+        log.debug("Email verification requested");
         emailVerificationService.verifyEmail(token);
     }
 
     public void resendVerification(String email) {
-
         if (email == null || email.isBlank()) {
             log.warn("Resend verification called with blank email");
             return;
         }
+
         emailVerificationService.resendVerificationToken(email);
     }
 
     @Transactional
     public void initiatePasswordReset(String email) {
-
         userRepository.findByEmail(email).ifPresentOrElse(user -> {
 
             if (!user.isEnabled()) {
-                log.warn("Password reset requested for disabled user: userId={}", user.getId());
+                log.warn("Password reset blocked for disabled user. userId={}", user.getId());
                 return;
             }
 
             if (!user.isEmailVerified()) {
-                log.warn("Password reset requested for unverified email: userId={}", user.getId());
+                log.warn("Password reset blocked for unverified email. userId={}", user.getId());
                 return;
             }
 
@@ -204,20 +225,15 @@ public class AuthService {
 
             try {
                 emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
-                log.info("Password reset email sent - userId={}", user.getId());
+                log.info("Password reset email sent. userId={}", user.getId());
             } catch (Exception ex) {
-                log.error("Password reset email failed - userId={}", user.getId(), ex);
+                log.error("Password reset email failed. userId={}", user.getId(), ex);
             }
 
-        }, () -> {
-            // Important: DEBUG only, no email value to avoid PII leakage
-            log.debug("Password reset requested for non-existent email");
-        });
+        }, () -> log.debug("Password reset requested for non-existent email"));
 
-        // Always exit silently (prevents user enumeration)
+        // silent exit to prevent enumeration
     }
-
-
 
     @Transactional
     public void resetPassword(String tokenValue, String rawPassword) {
@@ -227,22 +243,17 @@ public class AuthService {
 
         passwordPolicy.validate(rawPassword);
 
-        final PasswordResetToken token = passwordResetTokenRepository
+        PasswordResetToken token = passwordResetTokenRepository
                 .findByToken(tokenValue)
                 .orElseThrow(PasswordResetTokenInvalidException::new);
 
-        if (token.isUsed()) {
-            log.warn("Password reset attempted with already-used token");
-            throw new PasswordResetTokenExpiredException();
-        }
-
-        if (token.getExpiresAt().isBefore(Instant.now())) {
-            log.warn("Password reset attempted with expired token");
+        if (token.isUsed() || token.getExpiresAt().isBefore(Instant.now())) {
+            log.warn("Expired or used password reset token");
             passwordResetTokenRepository.delete(token);
             throw new PasswordResetTokenExpiredException();
         }
 
-        final User user = token.getUser();
+        User user = token.getUser();
         user.changePassword(passwordEncoder.encode(rawPassword));
         user.bumpPermissionVersion();
         token.setUsed(true);
@@ -250,23 +261,33 @@ public class AuthService {
         userRepository.save(user);
         passwordResetTokenRepository.save(token);
 
-        log.debug("Password reset successful - User ID: {}", user.getId());
+        log.info(
+                "Password reset successful. userId={} permVersion={}",
+                user.getId(),
+                user.getPermissionVersion()
+        );
     }
 
     private AuthLoginResult issueTokens(User user) {
-        final Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
+        Set<PermissionType> permissions = permissionService.resolvePermissions(user.getId());
 
-        final IssuedRefreshToken refreshToken = refreshTokenService.issue(
+        IssuedRefreshToken refreshToken = refreshTokenService.issue(
                 user.getId(),
                 jwtService.getRefreshTtlSeconds()
         );
 
+        log.debug(
+                "Issuing tokens. userId={} permissions={} permVersion={}",
+                user.getId(),
+                permissions.size(),
+                user.getPermissionVersion()
+        );
+
         return new AuthLoginResult(
-                user,
+                UserMapper.toResponse(user, permissions),
                 jwtService.generateAccessToken(user, permissions),
                 refreshToken.token(),
                 refreshToken.expiresAt().getEpochSecond()
         );
     }
-
 }

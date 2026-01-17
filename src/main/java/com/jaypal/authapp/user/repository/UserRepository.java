@@ -57,4 +57,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         from User u
     """)
     List<UserResponseDto> findAllBaseUsers();
+
+    @Query("""
+        select distinct u
+        from User u
+        left join fetch u.userRoles ur
+        left join fetch ur.role
+    """)
+    List<User> findAllWithRoles();
+
 }

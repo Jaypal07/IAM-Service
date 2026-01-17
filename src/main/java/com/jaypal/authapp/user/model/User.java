@@ -2,6 +2,7 @@ package com.jaypal.authapp.user.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -36,6 +37,8 @@ import java.util.stream.Collectors;
 public class User {
 
     @Id
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID id;
 
@@ -99,11 +102,9 @@ public class User {
             throw new IllegalArgumentException("Name cannot be blank");
         }
 
-        final UUID id = UUID.randomUUID();
         final Instant now = Instant.now();
 
         return User.builder()
-                .id(id)
                 .email(email.toLowerCase().trim())
                 .password(password)
                 .permissionVersion(0L)
@@ -111,7 +112,7 @@ public class User {
                 .enabled(false)
                 .emailVerified(false)
                 .provider(Provider.SYSTEM)
-                .providerId(id.toString())
+                // providerId will be set AFTER persist
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
@@ -210,6 +211,19 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
+    @PrePersist
+    private void onCreate() {
+        final Instant now = Instant.now();
+
+        this.createdAt = now;
+        this.updatedAt = now;
+
+        if (this.provider == Provider.SYSTEM && this.providerId == null) {
+            this.providerId = this.id.toString();
+        }
+    }
+
+
     public boolean isEmailVerified() {
         return emailVerified;
     }
@@ -226,19 +240,3 @@ public class User {
         return Objects.hash(id);
     }
 }
-
-/*
-CHANGELOG:
-1. Added explicit emailVerified flag (was incorrectly using enabled)
-2. Added null and blank validation to factory methods
-3. Added email normalization (toLowerCase + trim) in factories
-4. Added name trimming in factories and updateProfile
-5. Added length constraints to columns for database optimization
-6. Added indexes for common query patterns
-7. Added null/blank validation to changePassword
-8. Made getRoles() and getRoleEntities() return unmodifiable sets
-9. Fixed enable() to set both enabled AND emailVerified flags
-10. Added equals() and hashCode() based on ID
-11. Added default values for boolean fields
-12. Improved updateProfile to ignore blank strings
-*/

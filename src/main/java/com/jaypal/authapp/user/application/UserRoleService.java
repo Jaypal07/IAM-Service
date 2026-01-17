@@ -22,6 +22,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserRoleService {
 
+    private static final String POST_COMMIT_KEY =
+            UserRoleService.class.getName() + ".POST_COMMIT_REGISTERED";
+
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenService refreshTokenService;
@@ -34,7 +37,7 @@ public class UserRoleService {
         Objects.requireNonNull(roleType, "Role type cannot be null");
 
         assignRoleInternal(user, roleType);
-        registerPostCommitActions(user);
+        registerPostCommitActionsOnce(user.getId());
     }
 
     @Transactional
@@ -45,12 +48,19 @@ public class UserRoleService {
         Role role = roleRepository.findByType(roleType)
                 .orElseThrow(() -> new IllegalStateException("Role not initialized: " + roleType));
 
+        if (user.getUserRoles().size() <= 1) {
+            throw new IllegalStateException("User must have at least one role");
+        }
+
+
         userRoleRepository.deleteByUserAndRole(user, role);
+        // ✅ CRITICAL: keep persistence context consistent
+        user.getUserRoles().removeIf(ur -> ur.getRole().equals(role));
 
         user.bumpPermissionVersion();
         auditRoleRemoval(user, roleType);
 
-        registerPostCommitActions(user);
+        registerPostCommitActionsOnce(user.getId());
 
         log.info("Role removed: user={}, role={}", user.getId(), roleType);
     }
@@ -65,31 +75,47 @@ public class UserRoleService {
                 .orElseThrow(() -> new IllegalStateException("Role not initialized: " + roleType));
 
         if (userRoleRepository.existsByUserAndRole(user, role)) {
-            log.debug("Role already assigned. user={}, role={}", user.getId(), roleType);
             return;
         }
 
-        userRoleRepository.save(
-                UserRole.builder()
-                        .user(user)
-                        .role(role)
-                        .assignedAt(Instant.now())
-                        .build()
-        );
+        if (roleType.isOwner()) {
+            throw new IllegalStateException(
+                    "ROLE_OWNER assignment is restricted to system bootstrap"
+            );
+        }
+
+        UserRole userRole = UserRole.builder()
+                .user(user)
+                .role(role)
+                .assignedAt(Instant.now())
+                .build();
+
+        userRoleRepository.save(userRole);
+
+        // 🔑 THIS IS THE MISSING LINE
+        user.getUserRoles().add(userRole);
 
         user.bumpPermissionVersion();
         auditRoleAssignment(user, roleType);
-
-        log.info("Role assigned: user={}, role={}", user.getId(), roleType);
     }
 
-    private void registerPostCommitActions(User user) {
+    private void registerPostCommitActionsOnce(UUID userId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+
+        if (TransactionSynchronizationManager.hasResource(POST_COMMIT_KEY)) {
+            return;
+        }
+
+        TransactionSynchronizationManager.bindResource(POST_COMMIT_KEY, Boolean.TRUE);
+
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        evictPermissionCache(user.getId());
-                        refreshTokenService.revokeAllForUser(user.getId());
+                        evictPermissionCache(userId);
+                        refreshTokenService.revokeAllForUser(userId);
                     }
                 }
         );

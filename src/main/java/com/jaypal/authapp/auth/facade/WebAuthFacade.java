@@ -7,8 +7,7 @@ import com.jaypal.authapp.auth.exception.MissingRefreshTokenException;
 import com.jaypal.authapp.auth.infrastructure.RefreshTokenExtractor;
 import com.jaypal.authapp.auth.infrastructure.cookie.CookieService;
 import com.jaypal.authapp.security.principal.AuthPrincipal;
-import com.jaypal.authapp.security.ratelimit.InvalidRefreshTokenRateLimiter;
-import com.jaypal.authapp.security.ratelimit.RequestIpResolver;
+import com.jaypal.authapp.security.ratelimit.*;
 import com.jaypal.authapp.token.exception.RefreshTokenExpiredException;
 import com.jaypal.authapp.token.exception.RefreshTokenNotFoundException;
 import com.jaypal.authapp.token.exception.RefreshTokenRevokedException;
@@ -29,7 +28,9 @@ public class WebAuthFacade {
     private final AuthService authService;
     private final CookieService cookieService;
     private final RefreshTokenExtractor refreshTokenExtractor;
-    private final InvalidRefreshTokenRateLimiter invalidRefreshLimiter;
+
+    private final RedisRateLimiter rateLimiter;
+    private final RateLimitProperties rateLimitProperties;
 
     /* =========================
        LOGIN FLOW
@@ -37,29 +38,23 @@ public class WebAuthFacade {
 
     public AuthLoginResult login(AuthPrincipal principal, HttpServletResponse response) {
         if (principal == null) {
+            log.error("Login aborted. AuthPrincipal is null");
             throw new IllegalArgumentException("AuthPrincipal must not be null");
         }
 
-        log.debug(
-                "Login flow started | userId={}",
-                principal.getUserId()
-        );
+        log.debug("Login flow started | userId={}", principal.getUserId());
 
         AuthLoginResult result = authService.login(principal);
 
         log.debug(
-                "Login tokens issued | userId={} refreshExpiresAt={}",
-                result.user().getId(),
+                "Login successful | userId={} refreshExpiresAt={}",
+                result.user().id(),
                 result.refreshExpiresAtEpochSeconds()
         );
 
         attachRefreshCookie(response, result);
 
-        log.debug(
-                "Login flow completed | userId={}",
-                principal.getUserId()
-        );
-
+        log.debug("Login flow completed | userId={}", principal.getUserId());
         return result;
     }
 
@@ -72,9 +67,9 @@ public class WebAuthFacade {
             HttpServletResponse response,
             RefreshTokenRequest body
     ) {
-        log.debug("Refresh flow started");
+        final String ip = RequestIpResolver.resolve(request);
 
-        String ip = RequestIpResolver.resolve(request);
+        log.debug("Refresh flow started | ip={}", ip);
 
         try {
             String refreshToken =
@@ -91,7 +86,7 @@ public class WebAuthFacade {
                                         return token;
                                     }))
                             .orElseThrow(() -> {
-                                log.warn("Refresh failed: no refresh token present");
+                                log.warn("Refresh failed. No refresh token present | ip={}", ip);
                                 return new MissingRefreshTokenException();
                             });
 
@@ -99,14 +94,13 @@ public class WebAuthFacade {
 
             log.debug(
                     "Refresh successful | userId={} newRefreshExpiresAt={}",
-                    result.user().getId(),
+                    result.user().id(),
                     result.refreshExpiresAtEpochSeconds()
             );
 
             attachRefreshCookie(response, result);
 
-            log.debug("Refresh flow completed | userId={}", result.user().getId());
-
+            log.debug("Refresh flow completed | userId={}", result.user().id());
             return result;
 
         } catch (RefreshTokenNotFoundException |
@@ -114,11 +108,39 @@ public class WebAuthFacade {
                  RefreshTokenRevokedException |
                  MissingRefreshTokenException ex) {
 
-            // 🔥 INVALID REFRESH → RATE LIMIT HERE
-            invalidRefreshLimiter.check(ip);
+            RateLimitContext ctx = new RateLimitContext(
+                    "/api/v1/auth/refresh",
+                    "POST",
+                    "invalid-refresh-ip"
+            );
+
+            String key = "rl:refresh:invalid:ip:" + ip;
+
+            log.debug(
+                    "Invalid refresh detected | ip={} reason={} applying rate limit",
+                    ip,
+                    ex.getClass().getSimpleName()
+            );
+
+            boolean allowed = rateLimiter.allow(
+                    key,
+                    rateLimitProperties.getInvalidRefresh().getCapacity(),
+                    rateLimitProperties.getInvalidRefresh().getRefillPerSecond(),
+                    ctx
+            );
+
+            if (!allowed) {
+                log.warn(
+                        "Invalid refresh rate limit exceeded | ip={} capacity={} refillPerSecond={}",
+                        ip,
+                        rateLimitProperties.getInvalidRefresh().getCapacity(),
+                        rateLimitProperties.getInvalidRefresh().getRefillPerSecond()
+                );
+                throw new RateLimitExceededException("Too many refresh token attempts");
+            }
 
             log.warn(
-                    "Invalid refresh attempt | ip={} reason={}",
+                    "Invalid refresh attempt allowed | ip={} reason={}",
                     ip,
                     ex.getClass().getSimpleName()
             );
@@ -127,32 +149,38 @@ public class WebAuthFacade {
         }
     }
 
-
-
     /* =========================
        LOGOUT FLOW
        ========================= */
 
-    public void logout(HttpServletRequest request, HttpServletResponse response) {
-        log.debug("Logout flow started");
+    public void logout(
+            AuthPrincipal principal,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        log.debug("Logout flow started | userId={}", principal.getUserId());
 
-        refreshTokenExtractor.extract(request).ifPresentOrElse(
-                token -> {
-                    log.debug(
-                            "Logout refresh token found | length={} prefix={}",
-                            token.length(),
-                            token.substring(0, Math.min(8, token.length()))
-                    );
-                    authService.logout(token);
-                },
-                () -> log.debug("Logout called without refresh token")
-        );
+        try {
+            // Revoke refresh token if present
+            refreshTokenExtractor.extract(request)
+                    .ifPresent(authService::logout);
 
-        cookieService.clearRefreshCookie(response);
-        cookieService.addNoStoreHeader(response);
+        } catch (Exception ex) {
+            // Logout must never fail (idempotent)
+            log.warn(
+                    "Logout error ignored | userId={} reason={}",
+                    principal.getUserId(),
+                    ex.getMessage()
+            );
+        } finally {
+            // Always clear client-side state
+            cookieService.clearRefreshCookie(response);
+            cookieService.addNoStoreHeader(response);
 
-        log.debug("Logout flow completed");
+            log.debug("Logout flow completed | userId={}", principal.getUserId());
+        }
     }
+
 
     /* =========================
        INTERNAL HELPERS
@@ -162,19 +190,19 @@ public class WebAuthFacade {
         long now = Instant.now().getEpochSecond();
         long expiresAt = result.refreshExpiresAtEpochSeconds();
         long ttlSeconds = expiresAt - now;
+
         log.debug(
-                "Attaching refresh cookie | userId={} now={} expiresAt={} ttlSeconds={}",
-                result.user().getId(),
-                now,
-                expiresAt,
+                "Preparing refresh cookie | userId={} ttlSeconds={}",
+                result.user().id(),
                 ttlSeconds
         );
 
         if (ttlSeconds <= 0) {
             log.error(
-                    "Invalid refresh TTL detected | userId={} ttlSeconds={}",
-                    result.user().getId(),
-                    ttlSeconds
+                    "Invalid refresh TTL detected | userId={} expiresAt={} now={}",
+                    result.user().id(),
+                    expiresAt,
+                    now
             );
             throw new IllegalStateException("Invalid refresh token TTL");
         }
@@ -187,7 +215,7 @@ public class WebAuthFacade {
 
         log.debug(
                 "Refresh cookie attached | userId={} ttlSeconds={}",
-                result.user().getId(),
+                result.user().id(),
                 ttlSeconds
         );
     }

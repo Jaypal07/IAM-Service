@@ -131,7 +131,8 @@ public class AuthAuditAspect {
             case ADMIN_USER_CREATED,
                  ADMIN_USER_UPDATED,
                  ADMIN_USER_DELETED,
-                 TOKEN_INTROSPECTED
+                 TOKEN_INTROSPECTED,
+                 ADMIN_ACTION
                     -> AuditCategory.ADMIN;
         };
     }

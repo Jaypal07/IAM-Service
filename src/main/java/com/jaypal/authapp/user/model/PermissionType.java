@@ -13,11 +13,12 @@ public enum PermissionType {
     ROLE_MANAGE,
     PERMISSION_READ,
     PERMISSION_MANAGE,
+    RATE_LIMIT_RESET,
 
     // SECURITY
     TOKEN_REVOKE,
     SESSION_TERMINATE,
 
     // AUDIT
-    AUDIT_READ;
+    AUDIT_READ, USER_CREATE;
 }

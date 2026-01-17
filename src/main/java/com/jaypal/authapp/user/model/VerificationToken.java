@@ -2,6 +2,7 @@ package com.jaypal.authapp.user.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -29,7 +30,8 @@ public class VerificationToken {
     private static final long EXPIRY_MINUTES = 15;
 
     @Id
-    @GeneratedValue
+    @GeneratedValue()
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     private UUID id;
 
     @Column(nullable = false, unique = true)

@@ -3,6 +3,7 @@ package com.jaypal.authapp.audit.persistence;
 import com.jaypal.authapp.audit.application.AuditRequestContext;
 import com.jaypal.authapp.audit.domain.*;
 import jakarta.persistence.*;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -20,7 +21,8 @@ import java.util.UUID;
 public class AuthAuditLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue()
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     private UUID id;
 
     @Enumerated(EnumType.STRING)
