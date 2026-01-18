@@ -57,7 +57,10 @@ public class UserServiceImpl implements UserService {
             log.info("User created. userId={}", user.getId());
 
             // 🔑 RELOAD WITH ROLES
-            return hydrate(requireEnabledUser(user.getId()));
+            return UserMapper.toResponse(
+                    user,
+                    permissionService.resolvePermissions(user.getId())
+            );
 
         } catch (DataIntegrityViolationException ex) {
             throw new EmailAlreadyExistsException();

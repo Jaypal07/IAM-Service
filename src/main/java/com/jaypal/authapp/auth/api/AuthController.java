@@ -197,6 +197,43 @@ public class AuthController {
     }
 
     @AuthAudit(
+            event = AuthAuditEvent.TOKEN_REFRESHED,
+            subject = AuditSubjectType.IP,
+            subjectParam = "request"
+    )
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponse> refresh(
+            @RequestBody(required = false) RefreshTokenRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response
+    ) {
+        final String ip = RequestIpResolver.resolve(httpRequest);
+
+        log.debug("Refresh endpoint called | ip={}", ip);
+
+        AuthLoginResult result = webAuthFacade.refresh(
+                httpRequest,
+                response,
+                request
+        );
+
+        log.info(
+                "Token refresh successful | userId={} ip={}",
+                result.user().id(),
+                ip
+        );
+
+        return ResponseEntity.ok(
+                TokenResponse.of(
+                        result.accessToken(),
+                        jwtService.getAccessTtlSeconds(),
+                        result.user()
+                )
+        );
+    }
+
+
+    @AuthAudit(
             event = AuthAuditEvent.LOGOUT,
             subject = AuditSubjectType.USER_ID,
             subjectParam = "principal"

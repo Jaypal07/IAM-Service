@@ -230,6 +230,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity.ok().build();
     }
 
+    @ExceptionHandler(SilentEmailVerificationResendException.class)
+    public ResponseEntity<Void> handleSilentVerificationResend(
+            SilentEmailVerificationResendException ex,
+            WebRequest request
+    ) {
+        log.debug(
+                "Silent verification resend | path={} | reason={}",
+                extractPath(request),
+                ex.getMessage()
+        );
+
+        // Enumeration-safe response
+        return ResponseEntity.ok().build();
+    }
+
+    @ExceptionHandler(EmailDeliveryFailedException.class)
+    public ResponseEntity<Map<String, Object>> handleEmailDeliveryFailed(
+            EmailDeliveryFailedException ex,
+            WebRequest request
+    ) {
+        return problem(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Email delivery failed",
+                "We were unable to send the verification email. Please try again later.",
+                request,
+                "Email delivery failure",
+                true
+        );
+    }
+
+
+
     /* =====================
    USER / ROLE DOMAIN
    ===================== */
