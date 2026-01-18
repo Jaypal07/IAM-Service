@@ -2,9 +2,9 @@ package com.jaypal.authapp.common.aspect;
 
 import com.jaypal.authapp.common.annotation.AuthAudit;
 import com.jaypal.authapp.dto.audit.AuditRequestContext;
+import com.jaypal.authapp.domain.audit.entity.*;
 import com.jaypal.authapp.domain.audit.service.AuthAuditService;
 import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
-import com.jaypal.authapp.domain.audit.entity.*;
 import com.jaypal.authapp.infrastructure.audit.resolver.FailureReasonResolver;
 import com.jaypal.authapp.infrastructure.audit.resolver.IdentityResolver;
 import com.jaypal.authapp.infrastructure.audit.resolver.SubjectResolver;
@@ -28,15 +28,18 @@ public class AuthAuditAspect {
     private final IdentityResolver identityResolver;
     private final SubjectResolver subjectResolver;
 
+    /* ===================== SUCCESS ===================== */
+
     @AfterReturning(pointcut = "@annotation(authAudit)", returning = "result")
     public void success(JoinPoint jp, AuthAudit authAudit, Object result) {
         try {
             final AuditSubject subject = resolveSubject(jp, authAudit, result);
             final AuditRequestContext context = AuditContextHolder.getContext();
+            final AuthAuditEvent event = authAudit.event();
 
             auditService.record(
-                    resolveCategory(authAudit.event()),
-                    authAudit.event(),
+                    resolveCategory(event),
+                    event,
                     AuditOutcome.SUCCESS,
                     subject,
                     null,
@@ -48,6 +51,8 @@ public class AuthAuditAspect {
         }
     }
 
+    /* ===================== FAILURE ===================== */
+
     @AfterThrowing(pointcut = "@annotation(authAudit)", throwing = "ex")
     public void failure(JoinPoint jp, AuthAudit authAudit, Throwable ex) {
         try {
@@ -55,9 +60,13 @@ public class AuthAuditAspect {
             final AuditSubject subject = resolveSubjectSafely(jp, authAudit);
             final AuditRequestContext context = AuditContextHolder.getContext();
 
+            // 🔑 FIX: translate SUCCESS event → FAILURE event
+            final AuthAuditEvent failureEvent =
+                    toFailureEvent(authAudit.event());
+
             auditService.record(
-                    resolveCategory(authAudit.event()),
-                    authAudit.event(),
+                    resolveCategory(failureEvent),
+                    failureEvent,
                     AuditOutcome.FAILURE,
                     subject,
                     reason,
@@ -65,10 +74,34 @@ public class AuthAuditAspect {
                     context
             );
         } catch (Exception auditEx) {
-            log.error("Failed to record audit failure event: {} (original: {})",
-                    authAudit.event(), ex.getClass().getSimpleName(), auditEx);
+            log.error(
+                    "Failed to record audit failure event: {} (original: {})",
+                    authAudit.event(),
+                    ex.getClass().getSimpleName(),
+                    auditEx
+            );
         }
     }
+
+    /* ===================== EVENT TRANSLATION ===================== */
+
+    private AuthAuditEvent toFailureEvent(AuthAuditEvent event) {
+        return switch (event) {
+
+            case LOGIN_SUCCESS -> AuthAuditEvent.LOGIN_FAILURE;
+            case REGISTER_SUCCESS -> AuthAuditEvent.REGISTER_FAILURE;
+            case EMAIL_VERIFICATION_SUCCESS -> AuthAuditEvent.EMAIL_VERIFICATION_FAILURE;
+            case OAUTH_LOGIN_SUCCESS -> AuthAuditEvent.OAUTH_LOGIN_FAILURE;
+            case TOKEN_REFRESH_SUCCESS -> AuthAuditEvent.TOKEN_REFRESH_FAILURE;
+            case PASSWORD_CHANGE_SUCCESS -> AuthAuditEvent.PASSWORD_CHANGE_FAILURE;
+            case PASSWORD_RESET_SUCCESS -> AuthAuditEvent.PASSWORD_RESET_FAILURE;
+
+            // already failure or neutral
+            default -> event;
+        };
+    }
+
+    /* ===================== SUBJECT RESOLUTION ===================== */
 
     private AuditSubject resolveSubject(
             JoinPoint jp,
@@ -101,11 +134,16 @@ public class AuthAuditAspect {
         try {
             return resolveSubject(jp, authAudit, null);
         } catch (Exception ex) {
-            log.warn("Failed to resolve audit subject for failure event, using ANONYMOUS: {}",
-                    authAudit.event(), ex);
+            log.warn(
+                    "Failed to resolve audit subject for failure event, using ANONYMOUS: {}",
+                    authAudit.event(),
+                    ex
+            );
             return AuditSubject.anonymous();
         }
     }
+
+    /* ===================== CATEGORY RESOLUTION ===================== */
 
     private AuditCategory resolveCategory(AuthAuditEvent event) {
         return switch (event) {
@@ -120,8 +158,8 @@ public class AuthAuditAspect {
                  TOKEN_REVOKED_SINGLE, TOKEN_REVOKED_ALL
                     -> AuditCategory.AUTHENTICATION;
 
-            case TOKEN_INTROSPECTION_SUCCESS, TOKEN_INTROSPECTION_FAILURE, RATE_LIMIT_EXCEEDED,
-                 SECURITY_POLICY_VIOLATION, SYSTEM_ERROR
+            case TOKEN_INTROSPECTION_SUCCESS, TOKEN_INTROSPECTION_FAILURE,
+                 RATE_LIMIT_EXCEEDED, SECURITY_POLICY_VIOLATION, SYSTEM_ERROR
                     -> AuditCategory.SYSTEM;
 
             case PASSWORD_CHANGE_SUCCESS, PASSWORD_CHANGE_FAILURE,
@@ -142,8 +180,6 @@ public class AuthAuditAspect {
                  ADMIN_USER_LISTED, ADMIN_ROLE_MODIFIED,
                  ADMIN_PERMISSION_MODIFIED, ADMIN_ACTION_GENERIC
                     -> AuditCategory.ADMIN;
-
         };
     }
-
 }
