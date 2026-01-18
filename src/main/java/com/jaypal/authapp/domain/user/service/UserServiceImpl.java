@@ -1,14 +1,14 @@
 package com.jaypal.authapp.domain.user.service;
 
 import com.jaypal.authapp.config.properties.PasswordPolicy;
-import com.jaypal.authapp.domain.dto.user.UserCreateRequest;
-import com.jaypal.authapp.domain.dto.user.UserResponseDto;
-import com.jaypal.authapp.domain.dto.user.UserUpdateRequest;
+import com.jaypal.authapp.dto.user.UserCreateRequest;
+import com.jaypal.authapp.dto.user.UserResponseDto;
+import com.jaypal.authapp.dto.user.UserUpdateRequest;
 import com.jaypal.authapp.domain.user.vo.ImageUrlValidator;
 import com.jaypal.authapp.user.dto.*;
 import com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.domain.user.exception.ResourceNotFoundException;
-import com.jaypal.authapp.domain.mapper.UserMapper;
+import com.jaypal.authapp.mapper.UserMapper;
 import com.jaypal.authapp.domain.user.entity.User;
 import com.jaypal.authapp.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

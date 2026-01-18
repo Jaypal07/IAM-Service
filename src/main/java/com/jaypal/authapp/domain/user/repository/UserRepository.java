@@ -1,6 +1,6 @@
 package com.jaypal.authapp.domain.user.repository;
 
-import com.jaypal.authapp.domain.dto.user.UserResponseDto;
+import com.jaypal.authapp.dto.user.UserResponseDto;
 import com.jaypal.authapp.domain.user.entity.Provider;
 import com.jaypal.authapp.domain.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;

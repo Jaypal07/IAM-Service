@@ -1,6 +1,6 @@
 package com.jaypal.authapp.config.async;
 
-import com.jaypal.authapp.domain.infrastructure.audit.context.AuditContextHolder;
+import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

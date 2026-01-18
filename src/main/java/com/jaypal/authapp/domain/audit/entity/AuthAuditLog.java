@@ -1,6 +1,6 @@
 package com.jaypal.authapp.domain.audit.entity;
 
-import com.jaypal.authapp.domain.dto.audit.AuditRequestContext;
+import com.jaypal.authapp.dto.audit.AuditRequestContext;
 import com.jaypal.authapp.audit.domain.*;
 import jakarta.persistence.*;
 import lombok.ToString;

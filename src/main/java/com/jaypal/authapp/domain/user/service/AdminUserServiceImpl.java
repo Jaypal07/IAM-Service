@@ -1,14 +1,14 @@
 package com.jaypal.authapp.domain.user.service;
 
-import com.jaypal.authapp.domain.service.auth.EmailVerificationService;
+import com.jaypal.authapp.service.auth.EmailVerificationService;
 import com.jaypal.authapp.config.properties.PasswordPolicy;
-import com.jaypal.authapp.domain.dto.user.AdminUserCreateRequest;
-import com.jaypal.authapp.domain.dto.user.AdminUserRoleUpdateRequest;
-import com.jaypal.authapp.domain.dto.user.UserResponseDto;
+import com.jaypal.authapp.dto.user.AdminUserCreateRequest;
+import com.jaypal.authapp.dto.user.AdminUserRoleUpdateRequest;
+import com.jaypal.authapp.dto.user.UserResponseDto;
 import com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.domain.user.exception.InvalidRoleOperationException;
 import com.jaypal.authapp.domain.user.exception.ResourceNotFoundException;
-import com.jaypal.authapp.domain.mapper.UserMapper;
+import com.jaypal.authapp.mapper.UserMapper;
 import com.jaypal.authapp.domain.user.entity.RoleType;
 import com.jaypal.authapp.domain.user.entity.User;
 import com.jaypal.authapp.domain.user.repository.UserRepository;

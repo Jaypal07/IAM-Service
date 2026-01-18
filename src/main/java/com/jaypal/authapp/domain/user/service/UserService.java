@@ -1,8 +1,8 @@
 package com.jaypal.authapp.domain.user.service;
 
-import com.jaypal.authapp.domain.dto.user.UserCreateRequest;
-import com.jaypal.authapp.domain.dto.user.UserResponseDto;
-import com.jaypal.authapp.domain.dto.user.UserUpdateRequest;
+import com.jaypal.authapp.dto.user.UserCreateRequest;
+import com.jaypal.authapp.dto.user.UserResponseDto;
+import com.jaypal.authapp.dto.user.UserUpdateRequest;
 import com.jaypal.authapp.user.dto.*;
 
 import java.util.UUID;

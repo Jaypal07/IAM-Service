@@ -1,6 +1,6 @@
 package com.jaypal.authapp.config.health;
 
-import com.jaypal.authapp.domain.audit.repository.AuditFailureMonitor;
+import com.jaypal.authapp.domain.audit.service.AuditFailureMonitor;
 import lombok.AllArgsConstructor;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;

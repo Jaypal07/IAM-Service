@@ -1,14 +1,14 @@
 package com.jaypal.authapp.common.aspect;
 
 import com.jaypal.authapp.common.annotation.AuthAudit;
-import com.jaypal.authapp.domain.dto.audit.AuditRequestContext;
+import com.jaypal.authapp.dto.audit.AuditRequestContext;
 import com.jaypal.authapp.domain.audit.service.AuthAuditService;
-import com.jaypal.authapp.domain.infrastructure.audit.context.AuditContextHolder;
+import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
 import com.jaypal.authapp.audit.domain.*;
 import com.jaypal.authapp.domain.audit.entity.*;
-import com.jaypal.authapp.domain.infrastructure.audit.resolver.resolver.FailureReasonResolver;
-import com.jaypal.authapp.domain.infrastructure.audit.resolver.resolver.IdentityResolver;
-import com.jaypal.authapp.domain.infrastructure.audit.resolver.resolver.SubjectResolver;
+import com.jaypal.authapp.infrastructure.audit.resolver.FailureReasonResolver;
+import com.jaypal.authapp.infrastructure.audit.resolver.IdentityResolver;
+import com.jaypal.authapp.infrastructure.audit.resolver.SubjectResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;

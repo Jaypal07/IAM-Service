@@ -5,7 +5,7 @@ import com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.domain.user.exception.InvalidRoleOperationException;
 import com.jaypal.authapp.domain.user.exception.ResourceNotFoundException;
 import com.jaypal.authapp.domain.user.exception.UserAccountDisabledException;
-import com.jaypal.authapp.domain.infrastructure.ratelimit.RateLimitExceededException;
+import com.jaypal.authapp.infrastructure.ratelimit.RateLimitExceededException;
 import com.jaypal.authapp.exception.auth.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;

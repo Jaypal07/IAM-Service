@@ -1,8 +1,8 @@
 package com.jaypal.authapp.domain.user.service;
 
-import com.jaypal.authapp.domain.dto.user.AdminUserCreateRequest;
-import com.jaypal.authapp.domain.dto.user.AdminUserRoleUpdateRequest;
-import com.jaypal.authapp.domain.dto.user.UserResponseDto;
+import com.jaypal.authapp.dto.user.AdminUserCreateRequest;
+import com.jaypal.authapp.dto.user.AdminUserRoleUpdateRequest;
+import com.jaypal.authapp.dto.user.UserResponseDto;
 import com.jaypal.authapp.user.dto.*;
 
 import java.util.List;

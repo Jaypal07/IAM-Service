@@ -1,9 +1,9 @@
 package com.jaypal.authapp.domain.token.service;
 
 import com.jaypal.authapp.config.properties.RateLimitProperties;
-import com.jaypal.authapp.domain.infrastructure.ratelimit.RateLimitContext;
-import com.jaypal.authapp.domain.infrastructure.ratelimit.RateLimitExceededException;
-import com.jaypal.authapp.domain.infrastructure.ratelimit.RedisRateLimiter;
+import com.jaypal.authapp.infrastructure.ratelimit.RateLimitContext;
+import com.jaypal.authapp.infrastructure.ratelimit.RateLimitExceededException;
+import com.jaypal.authapp.infrastructure.ratelimit.RedisRateLimiter;
 import com.jaypal.authapp.domain.token.vo.IssuedRefreshToken;
 import com.jaypal.authapp.domain.token.exception.RefreshTokenExpiredException;
 import com.jaypal.authapp.domain.token.exception.RefreshTokenNotFoundException;

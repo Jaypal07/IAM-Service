@@ -1,7 +1,7 @@
 package com.jaypal.authapp.config.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jaypal.authapp.domain.infrastructure.security.filter.JwtAuthenticationFilter;
+import com.jaypal.authapp.infrastructure.security.filter.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
