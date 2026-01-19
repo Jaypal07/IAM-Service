@@ -2,6 +2,7 @@ package com.jaypal.authapp.service.auth;
 
 import com.jaypal.authapp.dto.auth.AuthLoginResult;
 import com.jaypal.authapp.event.UserRegisteredEvent;
+import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
 import com.jaypal.authapp.infrastructure.email.EmailService;
 import com.jaypal.authapp.config.properties.FrontendProperties;
 import com.jaypal.authapp.config.properties.PasswordPolicy;
@@ -193,8 +194,16 @@ public class AuthService {
             return;
         }
 
-        emailVerificationService.resendVerificationToken(email);
+        boolean sent = emailVerificationService.resendVerificationToken(email);
+
+        if (!sent) {
+            log.debug("Resend verification requested for already-verified user: {}", email);
+            AuditContextHolder.markNoOp();
+        } else {
+            log.debug("Verification email sent to {}", email);
+        }
     }
+
 
     @Transactional
     public void initiatePasswordReset(String email) {

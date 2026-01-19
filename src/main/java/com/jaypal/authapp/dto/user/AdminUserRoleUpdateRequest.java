@@ -8,7 +8,7 @@ public record AdminUserRoleUpdateRequest(
 
         Set<@Pattern(
                 regexp = "ROLE_(USER|ADMIN)",
-                message = "Invalid role name. Must be ROLE_USER or ROLE_OWNER"
+                message = "Invalid role name. Must be ROLE_USER or ROLE_ADMIN"
         ) String> addRoles,
 
         Set<@Pattern(

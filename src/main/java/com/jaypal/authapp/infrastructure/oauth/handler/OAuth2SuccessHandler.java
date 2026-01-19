@@ -48,7 +48,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
             final String redirectUrl = getSuccessRedirectUrl();
             auditService.record(
                     AuditCategory.AUTHENTICATION,
-                    AuthAuditEvent.OAUTH_LOGIN_SUCCESS,
+                    AuthAuditEvent.OAUTH_LOGIN,
                     AuditOutcome.SUCCESS,
                     AuditSubject.anonymous(),
                     null,

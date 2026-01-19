@@ -18,6 +18,13 @@ public class AuthAuditService {
     private final AuthAuditRepository repository;
     private final AuditFailureMonitor failureMonitor;
 
+    /* ============================================================
+       PUBLIC API
+       ============================================================ */
+
+    /**
+     * Records an audit log asynchronously. Supports SUCCESS, FAILURE, and NO_OP outcomes.
+     */
     @Async("auditExecutor")
     public void record(
             AuditCategory category,
@@ -28,38 +35,27 @@ public class AuthAuditService {
             AuthProvider provider,
             AuditRequestContext context
     ) {
+        final String thread = Thread.currentThread().getName();
+
         if (log.isDebugEnabled()) {
             log.debug(
-                    "AUDIT invoked | thread={} category={} event={} outcome={} subject={} failureReason={} provider={} context={}",
-                    Thread.currentThread().getName(),
+                    "AUDIT invoked | thread={} category={} event={} outcome={} subject={} failureReason={} provider={}",
+                    thread,
                     category,
                     event,
                     outcome,
                     subject,
                     failureReason,
-                    provider,
-                    context
+                    provider
             );
         }
 
         try {
-            if (log.isDebugEnabled()) {
-                log.debug("AUDIT enforcing invariants | event={}", event);
-            }
+            // Validate invariants (NO_OP allowed)
+            enforceInvariants(category, event, outcome, subject, failureReason, provider);
 
-            enforceInvariants(outcome, failureReason, subject, category, event, provider);
-
+            // Determine severity
             AuditSeverity severity = determineSeverity(outcome, failureReason);
-
-            if (log.isDebugEnabled()) {
-                log.debug(
-                        "AUDIT severity resolved | event={} outcome={} failureReason={} severity={}",
-                        event,
-                        outcome,
-                        failureReason,
-                        severity
-                );
-            }
 
             AuthAuditLog auditLog = new AuthAuditLog(
                     category,
@@ -72,135 +68,105 @@ public class AuthAuditService {
                     context
             );
 
-            if (log.isDebugEnabled()) {
-                log.debug("AUDIT entity created | auditLog={}", auditLog);
-            }
-
             AuthAuditLog saved = repository.save(auditLog);
 
-            log.info(
-                    "AUDIT persisted | auditId={} event={} outcome={} severity={}",
-                    saved.getId(),
-                    event,
-                    outcome,
-                    severity
-            );
-
-            if (outcome == AuditOutcome.FAILURE
-                    && failureReason != null
-                    && failureReason.getSeverity() == AuditSeverity.CRITICAL) {
-
-                log.warn(
-                        "AUDIT CRITICAL | event={} subject={} failureReason={} provider={} context={}",
-                        event,
-                        subject,
-                        failureReason,
-                        provider,
-                        context
+            switch (outcome) {
+                case SUCCESS, NO_OP -> log.info(
+                        "AUDIT persisted | auditId={} event={} outcome={} severity={}",
+                        saved.getId(), event, outcome, severity
                 );
+                case FAILURE -> {
+                    log.info(
+                            "AUDIT persisted | auditId={} event={} outcome={} severity={}",
+                            saved.getId(), event, outcome, severity
+                    );
+                    if (severity == AuditSeverity.CRITICAL) {
+                        log.warn(
+                                "AUDIT CRITICAL | event={} subject={} failureReason={} provider={}",
+                                event, subject, failureReason, provider
+                        );
+                    }
+                }
             }
 
         } catch (Exception ex) {
             log.error(
-                    "AUDIT failed | event={} outcome={} subject={} provider={} context={}",
-                    event,
-                    outcome,
-                    subject,
-                    provider,
-                    context,
-                    ex
+                    "AUDIT FAILED | event={} outcome={} subject={} provider={}",
+                    event, outcome, subject, provider, ex
             );
-
             failureMonitor.onAuditFailure(event, ex);
         }
     }
 
+    /* ============================================================
+       INVARIANTS
+       ============================================================ */
+
     private void enforceInvariants(
-            AuditOutcome outcome,
-            AuthFailureReason failureReason,
-            AuditSubject subject,
             AuditCategory category,
             AuthAuditEvent event,
+            AuditOutcome outcome,
+            AuditSubject subject,
+            AuthFailureReason failureReason,
             AuthProvider provider
     ) {
-        if (log.isDebugEnabled()) {
-            log.debug(
-                    "AUDIT invariant check | category={} event={} outcome={} subject={} failureReason={} provider={}",
-                    category,
-                    event,
-                    outcome,
-                    subject,
-                    failureReason,
-                    provider
-            );
-        }
+        Objects.requireNonNull(category, "Audit category must not be null");
+        Objects.requireNonNull(event, "Audit event must not be null");
+        Objects.requireNonNull(outcome, "Audit outcome must not be null");
+        Objects.requireNonNull(subject, "Audit subject must not be null");
+        Objects.requireNonNull(provider, "Auth provider must not be null");
 
-        Objects.requireNonNull(category, "Category cannot be null");
-        Objects.requireNonNull(event, "Event cannot be null");
-        Objects.requireNonNull(outcome, "Outcome cannot be null");
-        Objects.requireNonNull(subject, "Subject cannot be null");
-        Objects.requireNonNull(provider, "Provider cannot be null");
-
+        // NO_OP is allowed for any event
         if (outcome == AuditOutcome.FAILURE && !eventAllowsFailure(event)) {
-            throw new IllegalArgumentException(
-                    "Failure not allowed for event: " + event
-            );
+            throw new IllegalArgumentException("Failure outcome not allowed for event: " + event);
         }
-
 
         if (outcome == AuditOutcome.FAILURE && failureReason == null) {
-            log.error("AUDIT invariant violation | FAILURE without failureReason event={}", event);
-            throw new IllegalArgumentException(
-                    "Failure outcome must include reason for event: " + event
-            );
+            throw new IllegalArgumentException("Failure outcome requires failureReason for event: " + event);
         }
 
         if (outcome == AuditOutcome.SUCCESS && failureReason != null) {
-            log.error("AUDIT invariant violation | SUCCESS with failureReason event={}", event);
-            throw new IllegalArgumentException(
-                    "Success outcome must not include failure reason for event: " + event
-            );
+            throw new IllegalArgumentException("Success outcome must not include failureReason for event: " + event);
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("AUDIT invariant check passed | event={}", event);
+            log.debug("AUDIT invariants validated | event={} outcome={}", event, outcome);
         }
     }
+
+    /* ============================================================
+       SEVERITY
+       ============================================================ */
 
     private AuditSeverity determineSeverity(
             AuditOutcome outcome,
             AuthFailureReason failureReason
     ) {
-        if (log.isDebugEnabled()) {
-            log.debug(
-                    "AUDIT determining severity | outcome={} failureReason={}",
-                    outcome,
-                    failureReason
-            );
-        }
-
-        if (outcome == AuditOutcome.SUCCESS) {
-            return AuditSeverity.LOW;
-        }
-
-        return failureReason != null
-                ? failureReason.getSeverity()
-                : AuditSeverity.MEDIUM;
-    }
-
-    private boolean eventAllowsFailure(AuthAuditEvent event) {
-        return switch (event) {
-            case LOGIN_SUCCESS,
-                 REGISTER_SUCCESS,
-                 EMAIL_VERIFICATION_SUCCESS,
-                 OAUTH_LOGIN_SUCCESS,
-                 TOKEN_REFRESH_SUCCESS,
-                 PASSWORD_CHANGE_SUCCESS,
-                 PASSWORD_RESET_SUCCESS,
-                 TOKEN_INTROSPECTION_SUCCESS
-                    -> false;
-            default -> true;
+        return switch (outcome) {
+            case SUCCESS, NO_OP -> AuditSeverity.LOW;
+            case FAILURE -> failureReason != null ? failureReason.getSeverity() : AuditSeverity.MEDIUM;
         };
     }
 
+    /* ============================================================
+       EVENT RULES
+       ============================================================ */
+
+    /**
+     * Events that represent terminal success states
+     * and must never be recorded as FAILURE.
+     */
+    private boolean eventAllowsFailure(AuthAuditEvent event) {
+        return switch (event) {
+            case LOGIN,
+                 REGISTER,
+                 EMAIL_VERIFICATION,
+                 OAUTH_LOGIN,
+                 TOKEN_REFRESH,
+                 PASSWORD_CHANGE,
+                 PASSWORD_RESET,
+                 TOKEN_INTROSPECTION -> false;
+            default -> true;
+        };
+    }
 }

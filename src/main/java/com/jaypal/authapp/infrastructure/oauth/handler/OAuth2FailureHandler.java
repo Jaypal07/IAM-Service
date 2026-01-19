@@ -106,7 +106,7 @@ public class OAuth2FailureHandler implements AuthenticationFailureHandler {
 
             auditService.record(
                     AuditCategory.AUTHENTICATION,
-                    AuthAuditEvent.OAUTH_LOGIN_FAILURE,
+                    AuthAuditEvent.OAUTH_LOGIN,
                     AuditOutcome.FAILURE,
                     AuditSubject.anonymous(),
                     reason,

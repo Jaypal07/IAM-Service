@@ -20,5 +20,6 @@ public enum PermissionType {
     SESSION_TERMINATE,
 
     // AUDIT
-    AUDIT_READ, USER_CREATE;
+    AUDIT_READ,
+    USER_CREATE;
 }

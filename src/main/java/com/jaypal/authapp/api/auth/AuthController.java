@@ -51,7 +51,7 @@ public class AuthController {
     private final RateLimitProperties rateLimitProperties;
 
     @AuthAudit(
-            event = AuthAuditEvent.LOGIN_SUCCESS,
+            event = AuthAuditEvent.LOGIN,
             subject = AuditSubjectType.EMAIL,
             subjectParam = "request"
     )
@@ -120,7 +120,7 @@ public class AuthController {
     }
 
     @AuthAudit(
-            event = AuthAuditEvent.REGISTER_SUCCESS,
+            event = AuthAuditEvent.REGISTER,
             subject = AuditSubjectType.EMAIL,
             subjectParam = "request"
     )
@@ -138,7 +138,7 @@ public class AuthController {
     /* ===================== EMAIL VERIFICATION ===================== */
 
     @AuthAudit(
-            event = AuthAuditEvent.EMAIL_VERIFICATION_SUCCESS,
+            event = AuthAuditEvent.EMAIL_VERIFICATION,
             subject = AuditSubjectType.SYSTEM
     )
     @GetMapping("/email-verify")
@@ -199,7 +199,7 @@ public class AuthController {
     }
 
     @AuthAudit(
-            event = AuthAuditEvent.PASSWORD_RESET_SUCCESS,
+            event = AuthAuditEvent.PASSWORD_RESET,
             subject = AuditSubjectType.SYSTEM
     )
     @PostMapping("/password-reset/confirm")
@@ -222,7 +222,7 @@ public class AuthController {
     }
 
     @AuthAudit(
-            event = AuthAuditEvent.TOKEN_REFRESH_SUCCESS,
+            event = AuthAuditEvent.TOKEN_REFRESH,
             subject = AuditSubjectType.USER_ID
     )
     @PostMapping("/refresh")

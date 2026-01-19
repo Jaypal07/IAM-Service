@@ -22,7 +22,7 @@ public class TokenIntrospectionController {
     private final TokenIntrospectionService introspectionService;
 
     @AuthAudit(
-            event = AuthAuditEvent.TOKEN_INTROSPECTION_SUCCESS,
+            event = AuthAuditEvent.TOKEN_INTROSPECTION,
             subject = AuditSubjectType.ANONYMOUS,
             provider = AuthProvider.SYSTEM
     )

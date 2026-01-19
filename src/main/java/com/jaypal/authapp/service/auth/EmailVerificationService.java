@@ -29,6 +29,9 @@ public class EmailVerificationService {
     private final EmailService emailService;
     private final FrontendProperties frontendProperties;
 
+    /**
+     * Create a new verification token for a user and send email.
+     */
     @Transactional
     public void createVerificationToken(UUID userId) {
         Objects.requireNonNull(userId, "User ID cannot be null");
@@ -63,12 +66,17 @@ public class EmailVerificationService {
         }
     }
 
+    /**
+     * Resend verification token.
+     *
+     * @return true if a verification email was sent, false if user already verified
+     */
     @Transactional
-    public void resendVerificationToken(String email) {
+    public boolean resendVerificationToken(String email) {
         Objects.requireNonNull(email, "Email cannot be null");
 
         if (email.isBlank()) {
-            log.debug("Resend verification silent fail");
+            log.debug("Resend verification called with blank email - silent exit");
             throw new EmailNotRegisteredException();
         }
 
@@ -77,12 +85,16 @@ public class EmailVerificationService {
 
         if (user.isEmailVerified()) {
             log.debug("Verification resend requested for already-verified user: {}", user.getId());
-            return;
+            return false;
         }
 
         createVerificationToken(user.getId());
+        return true;
     }
 
+    /**
+     * Verify email using a token.
+     */
     @Transactional
     public void verifyEmail(String tokenValue) {
         Objects.requireNonNull(tokenValue, "Token cannot be null");
