@@ -16,10 +16,7 @@ import org.springframework.web.context.request.WebRequest;
 
 import java.util.*;
 
-/**
- * Centralized audit logging for authentication and authorization events.
- * Handles safe auditing with fallback mechanisms to prevent audit failures from breaking request flow.
- */
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
