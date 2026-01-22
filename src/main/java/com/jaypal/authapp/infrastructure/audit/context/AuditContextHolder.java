@@ -7,14 +7,18 @@ import org.springframework.lang.NonNull;
 public final class AuditContextHolder {
 
     private static final ThreadLocal<AuditRequestContext> CONTEXT = new ThreadLocal<>();
-    private static final ThreadLocal<Boolean> NO_OP = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> NO_OP = ThreadLocal.withInitial(() -> false);
 
     private AuditContextHolder() {
         throw new UnsupportedOperationException("Utility class");
     }
 
     public static void setContext(AuditRequestContext context) {
-        CONTEXT.set(context);
+        if (context == null) {
+            CONTEXT.remove();
+        } else {
+            CONTEXT.set(context);
+        }
     }
 
     public static AuditRequestContext getContext() {

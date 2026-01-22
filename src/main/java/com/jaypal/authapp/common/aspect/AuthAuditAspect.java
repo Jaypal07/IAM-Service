@@ -3,6 +3,7 @@ package com.jaypal.authapp.common.aspect;
 import com.jaypal.authapp.common.annotation.AuthAudit;
 import com.jaypal.authapp.domain.audit.entity.*;
 import com.jaypal.authapp.domain.audit.service.AuthAuditService;
+import com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.dto.audit.AuditRequestContext;
 import com.jaypal.authapp.exception.auth.EmailAlreadyVerifiedException;
 import com.jaypal.authapp.exception.auth.EmailNotRegisteredException;
@@ -77,6 +78,14 @@ public class AuthAuditAspect {
         if (ex instanceof EmailAlreadyVerifiedException) {
             log.info(
                     "AuthAudit NO_OP (idempotent): event={}, reason=EMAIL_ALREADY_VERIFIED",
+                    authAudit.event()
+            );
+            return true;
+        }
+
+        if (ex instanceof EmailAlreadyExistsException) {
+            log.info(
+                    "AuthAudit NO_OP (idempotent): event={}, reason=EMAIL_ALREADY_EXISTS",
                     authAudit.event()
             );
             return true;

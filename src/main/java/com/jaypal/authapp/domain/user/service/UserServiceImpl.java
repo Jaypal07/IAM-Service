@@ -7,6 +7,7 @@ import com.jaypal.authapp.dto.user.UserUpdateRequest;
 import com.jaypal.authapp.domain.user.util.ImageUrlValidator;
 import com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.domain.user.exception.ResourceNotFoundException;
+import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
 import com.jaypal.authapp.mapper.UserMapper;
 import com.jaypal.authapp.domain.user.entity.User;
 import com.jaypal.authapp.domain.user.repository.UserRepository;
@@ -36,7 +37,7 @@ public class UserServiceImpl implements UserService {
     // -------------------------------------------------------------------------
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = EmailAlreadyExistsException.class)
     public UserResponseDto createUser(UserCreateRequest req) {
         Objects.requireNonNull(req, "UserCreateRequest cannot be null");
 
@@ -57,18 +58,31 @@ public class UserServiceImpl implements UserService {
             user.bumpPermissionVersion();
             userRepository.saveAndFlush(user);
 
-            log.info("User created. userId={}", user.getId());
+            log.info("User created successfully. userId={}", user.getId());
 
-            // 🔑 RELOAD WITH ROLES
+            // 🔑 RELOAD WITH ROLES & PERMISSIONS
             return UserMapper.toResponse(
                     user,
                     permissionService.resolvePermissions(user.getId())
             );
 
         } catch (DataIntegrityViolationException ex) {
+            // Business rule violation → no state change → NO_OP
+            AuditContextHolder.markNoOp();
+
+            log.info(
+                    "Duplicate email registration attempt detected. " + "Audit outcome marked as NO_OP. email={}",
+                    req.email()
+            );
+
             throw new EmailAlreadyExistsException();
+
+        } finally {
+            // 🚨 CRITICAL: prevent ThreadLocal leakage across requests
+            AuditContextHolder.clear();
         }
     }
+
 
     // -------------------------------------------------------------------------
     // READ
