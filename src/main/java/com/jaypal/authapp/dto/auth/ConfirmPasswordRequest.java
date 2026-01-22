@@ -3,7 +3,7 @@ package com.jaypal.authapp.dto.auth;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-public record ResetPasswordRequest(
+public record ConfirmPasswordRequest(
         @NotBlank(message = "Reset token is required")
         @Size(min = 36, max = 36, message = "Invalid token format")
         String token,

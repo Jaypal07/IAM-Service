@@ -201,16 +201,9 @@ public class AuthController {
     )
     @PostMapping("/password-reset/confirm")
     public ResponseEntity<Map<String, String>> resetPassword(
-            @RequestParam
-            @NotBlank
-            @Pattern(
-                    regexp = "^[0-9a-fA-F\\-]{36}$",
-                    message = "Invalid reset token format"
-            )
-            String token,
-            @RequestParam @NotBlank String password
+            @Valid @RequestBody ConfirmPasswordRequest request
     ) {
-        authService.resetPassword(token, password);
+        authService.resetPassword(request.token(), request.newPassword());
 
         return ResponseEntity.ok(Map.of(
                 "message", "Password reset successful.",
