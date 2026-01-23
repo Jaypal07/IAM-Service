@@ -1,7 +1,7 @@
 package com.jaypal.authapp.infrastructure.security.filter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaypal.authapp.domain.user.repository.UserRepository;
+import com.jaypal.authapp.exception.response.ApiErrorResponseBuilder;
 import com.jaypal.authapp.infrastructure.principal.AuthPrincipal;
 import com.jaypal.authapp.infrastructure.security.jwt.JwtService;
 import io.jsonwebtoken.Claims;
@@ -14,12 +14,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -36,7 +38,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
-    private final ObjectMapper objectMapper;
+    private final ApiErrorResponseBuilder errorResponseBuilder;
 
     @Override
     protected void doFilterInternal(
@@ -45,7 +47,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain chain
     ) throws ServletException, IOException {
 
-        final Optional<String> tokenOpt = extractBearerToken(request);
+        Optional<String> tokenOpt = extractBearerToken(request);
 
         if (tokenOpt.isEmpty()) {
             chain.doFilter(request, response);
@@ -54,27 +56,37 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             authenticate(tokenOpt.get(), request);
-            log.debug("JWT authentication successful for user: {}",
+
+            log.debug(
+                    "JWT authentication successful for user: {}",
                     ((AuthPrincipal) SecurityContextHolder.getContext()
                             .getAuthentication()
-                            .getPrincipal()).getUserId()
+                            .getPrincipal())
+                            .getUserId()
             );
 
         } catch (ExpiredJwtException ex) {
             log.debug("JWT token expired: {}", ex.getMessage());
-            sendUnauthorized(response, "Token expired");
+            writeUnauthorized(response, request, ex, "Token expired");
             return;
+
         } catch (JwtException ex) {
             log.warn("JWT validation failed: {}", ex.getMessage());
-            sendUnauthorized(response, "Invalid token");
+            writeUnauthorized(response, request, ex, "Invalid token");
             return;
+
         } catch (IllegalArgumentException ex) {
             log.warn("JWT parsing failed: {}", ex.getMessage());
-            sendUnauthorized(response, "Malformed token");
+            writeUnauthorized(response, request, ex, "Malformed token");
             return;
+
         } catch (Exception ex) {
-            log.error("Unexpected error during JWT authentication for request: {}", request.getRequestURI(), ex);
-            sendUnauthorized(response, "Authentication failed");
+            log.error(
+                    "Unexpected error during JWT authentication for request: {}",
+                    request.getRequestURI(),
+                    ex
+            );
+            writeUnauthorized(response, request, ex, "Authentication failed");
             return;
         }
 
@@ -82,37 +94,40 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private Optional<String> extractBearerToken(HttpServletRequest request) {
-        final String header = request.getHeader(AUTH_HEADER);
+        String header = request.getHeader(AUTH_HEADER);
 
         if (header == null || !header.startsWith(BEARER_PREFIX)) {
             return Optional.empty();
         }
 
-        final String token = header.substring(BEARER_PREFIX_LENGTH).trim();
+        String token = header.substring(BEARER_PREFIX_LENGTH).trim();
         return token.isEmpty() ? Optional.empty() : Optional.of(token);
     }
 
     private void authenticate(String token, HttpServletRequest request) {
-        final Jws<Claims> parsed = jwtService.parseAccessToken(token);
-        final Claims claims = parsed.getBody();
+        Jws<Claims> parsed = jwtService.parseAccessToken(token);
+        Claims claims = parsed.getBody();
 
-        final UUID userId = jwtService.extractUserId(claims);
-        final long tokenPermissionVersion = jwtService.extractPermissionVersion(claims);
+        UUID userId = jwtService.extractUserId(claims);
+        long tokenPermissionVersion = jwtService.extractPermissionVersion(claims);
 
         validatePermissionVersion(userId, tokenPermissionVersion);
 
-        final Set<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
-        final AuthPrincipal principal = buildPrincipal(userId, claims, authorities);
+        Set<SimpleGrantedAuthority> authorities = extractAuthorities(claims);
+        AuthPrincipal principal = buildPrincipal(userId, claims, authorities);
 
-        final UsernamePasswordAuthenticationToken authentication =
+        UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
-        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        authentication.setDetails(
+                new WebAuthenticationDetailsSource().buildDetails(request)
+        );
+
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     private void validatePermissionVersion(UUID userId, long tokenPermissionVersion) {
-        final Long currentPermissionVersion = userRepository
+        Long currentPermissionVersion = userRepository
                 .findPermissionVersionById(userId)
                 .orElse(null);
 
@@ -121,17 +136,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throw new IllegalStateException("User not found");
         }
 
-        if (tokenPermissionVersion != currentPermissionVersion) {
+        if (!Objects.equals(tokenPermissionVersion, currentPermissionVersion)) {
             log.warn(
                     "Token validation failed: Permission version mismatch for user {}. Token PV: {}, Current PV: {}",
-                    userId, tokenPermissionVersion, currentPermissionVersion
+                    userId,
+                    tokenPermissionVersion,
+                    currentPermissionVersion
             );
             throw new IllegalStateException("Token permissions outdated");
         }
     }
 
     private Set<SimpleGrantedAuthority> extractAuthorities(Claims claims) {
-        final Set<SimpleGrantedAuthority> authorities = new HashSet<>();
+        Set<SimpleGrantedAuthority> authorities = new HashSet<>();
 
         jwtService.extractRoles(claims)
                 .forEach(role -> authorities.add(new SimpleGrantedAuthority(role)));
@@ -157,22 +174,38 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
-        final String path = request.getRequestURI();
+        String path = request.getRequestURI();
         return path.startsWith("/api/v1/auth/") || path.equals("/api/v1/auth");
     }
 
-    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+    private void writeUnauthorized(
+            HttpServletResponse response,
+            HttpServletRequest request,
+            Throwable ex,
+            String defaultMessage
+    ) throws IOException {
+
+        var entity = errorResponseBuilder.build(
+                HttpStatus.UNAUTHORIZED,
+                "Unauthorized",
+                errorResponseBuilder.resolveMessage(ex, defaultMessage),
+                new ServletWebRequest(request),
+                "JWT authentication failure",
+                false
+        );
+
+        response.setStatus(entity.getStatusCode().value());
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
-        final Map<String, Object> errorResponse = Map.of(
-                "status", 401,
-                "error", "Unauthorized",
-                "message", message,
-                "timestamp", System.currentTimeMillis()
+        entity.getHeaders().forEach((k, v) ->
+                response.addHeader(k, String.join(",", v))
         );
 
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        response.getWriter().write(
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                        .writeValueAsString(entity.getBody())
+        );
+        response.getWriter().flush();
     }
 }
