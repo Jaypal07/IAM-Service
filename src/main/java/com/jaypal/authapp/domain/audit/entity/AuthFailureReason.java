@@ -52,15 +52,6 @@ public enum AuthFailureReason {
     DATA_INTEGRITY_VIOLATION(AuditSeverity.CRITICAL),
     SYSTEM_ERROR(AuditSeverity.CRITICAL);
 
-    void TOKEN_INVALID(AuditSeverity.HIGH),
-    TOKEN_REVOKED(AuditSeverity.CRITICAL),
-    TOKEN_REFRESH_REUSED(AuditSeverity.CRITICAL),
-
-    /* AUTHORIZATION (RBAC) */
-    INSUFFICIENT_ROLE(AuditSeverity.MEDIUM),
-    INSUFFICIENT_PERMISSION(AuditSeverity.MEDIUM),
-
-
     private final AuditSeverity severity;
 
     AuthFailureReason(AuditSeverity severity) {
