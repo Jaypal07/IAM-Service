@@ -28,10 +28,11 @@ public class AuthenticationExceptionHandler {
             BadCredentialsException ex,
             WebRequest request
     ) {
-        return problemBuilder.build(
+        return buildResponse(
                 HttpStatus.UNAUTHORIZED,
                 "Invalid credentials",
-                problemBuilder.resolveMessage(ex, "The email or password you entered is incorrect."),
+                ex,
+                "The email or password you entered is incorrect.",
                 request,
                 "Authentication failure: invalid credentials",
                 false
@@ -42,10 +43,11 @@ public class AuthenticationExceptionHandler {
             AuthenticatedUserMissingException ex,
             WebRequest request
     ) {
-        return problemBuilder.build(
+        return buildResponse(
                 HttpStatus.UNAUTHORIZED,
                 "Authentication context invalid",
-                problemBuilder.resolveMessage(ex, "Authentication state is no longer valid. Please log in again."),
+                ex,
+                "Authentication state is no longer valid. Please log in again.",
                 request,
                 "Authenticated user missing from database",
                 true
@@ -56,10 +58,11 @@ public class AuthenticationExceptionHandler {
             UserAccountDisabledException ex,
             WebRequest request
     ) {
-        return problemBuilder.build(
+        return buildResponse(
                 HttpStatus.FORBIDDEN,
                 "Account disabled",
-                problemBuilder.resolveMessage(ex, "Your account has been disabled. Please contact support."),
+                ex,
+                "Your account has been disabled. Please contact support.",
                 request,
                 "Account disabled",
                 false
@@ -70,10 +73,11 @@ public class AuthenticationExceptionHandler {
             EmailNotVerifiedException ex,
             WebRequest request
     ) {
-        return problemBuilder.build(
+        return buildResponse(
                 HttpStatus.FORBIDDEN,
                 "Email not verified",
-                problemBuilder.resolveMessage(ex, "Please verify your email address before logging in."),
+                ex,
+                "Please verify your email address before logging in.",
                 request,
                 "Authentication failure: email not verified",
                 false
@@ -84,10 +88,11 @@ public class AuthenticationExceptionHandler {
             LockedException ex,
             WebRequest request
     ) {
-        return problemBuilder.build(
+        return buildResponse(
                 HttpStatus.FORBIDDEN,
                 "Account locked",
-                problemBuilder.resolveMessage(ex, "Your account is locked. Please contact support."),
+                ex,
+                "Your account is locked. Please contact support.",
                 request,
                 "Authentication failure: account locked",
                 false
@@ -100,95 +105,102 @@ public class AuthenticationExceptionHandler {
     ) {
         Throwable cause = ex.getCause();
 
-        if (isAccountDisabledException(cause)) {
-            return createAccountDisabledResponse(cause, request);
+        if (isAccountDisabled(cause)) {
+            return handleWrapped(
+                    cause,
+                    HttpStatus.FORBIDDEN,
+                    "Account disabled",
+                    "Your account has been disabled. Please contact support.",
+                    request,
+                    "Authentication failure: account disabled (wrapped)"
+            );
         }
 
         if (cause instanceof LockedException) {
-            return createAccountLockedResponse(cause, request);
+            return handleWrapped(
+                    cause,
+                    HttpStatus.FORBIDDEN,
+                    "Account locked",
+                    "Your account is locked. Please contact support.",
+                    request,
+                    "Authentication failure: account locked (wrapped)"
+            );
         }
 
-        if (cause instanceof EmailNotVerifiedException emailNotVerified) {
-            return createEmailNotVerifiedResponse(emailNotVerified, request);
+        if (cause instanceof EmailNotVerifiedException) {
+            return handleWrapped(
+                    cause,
+                    HttpStatus.FORBIDDEN,
+                    "Email not verified",
+                    "Please verify your email address before logging in.",
+                    request,
+                    "Authentication failure: email not verified (wrapped)"
+            );
         }
 
         if (cause instanceof BadCredentialsException) {
-            return createBadCredentialsResponse(cause, request);
+            return handleWrapped(
+                    cause,
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid credentials",
+                    "The email or password you entered is incorrect.",
+                    request,
+                    "Authentication failure: invalid credentials (wrapped)"
+            );
         }
 
         log.error("Unhandled InternalAuthenticationServiceException", ex);
 
-        return problemBuilder.build(
+        return buildResponse(
                 HttpStatus.UNAUTHORIZED,
                 "Authentication failed",
-                problemBuilder.resolveMessage(ex, "Authentication failed. Please try again."),
+                ex,
+                "Authentication failed. Please try again.",
                 request,
                 "Authentication failure: internal service exception",
                 true
         );
     }
 
-    private boolean isAccountDisabledException(Throwable cause) {
-        return cause instanceof DisabledException ||
-                cause instanceof UserAccountDisabledException;
+    private boolean isAccountDisabled(Throwable cause) {
+        return cause instanceof DisabledException;
     }
 
-    private ResponseEntity<Map<String, Object>> createAccountDisabledResponse(
+    private ResponseEntity<Map<String, Object>> handleWrapped(
             Throwable cause,
-            WebRequest request
+            HttpStatus status,
+            String title,
+            String defaultMessage,
+            WebRequest request,
+            String logMessage
     ) {
-        return problemBuilder.build(
-                HttpStatus.FORBIDDEN,
-                "Account disabled",
-                problemBuilder.resolveMessage(cause, "Your account has been disabled. Please contact support."),
+        return buildResponse(
+                status,
+                title,
+                cause,
+                defaultMessage,
                 request,
-                "Authentication failure: account disabled (wrapped)",
+                logMessage,
                 false
         );
     }
 
-    private ResponseEntity<Map<String, Object>> createAccountLockedResponse(
-            Throwable cause,
-            WebRequest request
+    private ResponseEntity<Map<String, Object>> buildResponse(
+            HttpStatus status,
+            String title,
+            Throwable ex,
+            String defaultMessage,
+            WebRequest request,
+            String logMessage,
+            boolean includeStackTrace
     ) {
         return problemBuilder.build(
-                HttpStatus.FORBIDDEN,
-                "Account locked",
-                problemBuilder.resolveMessage(cause, "Your account is locked. Please contact support."),
+                status,
+                title,
+                problemBuilder.resolveMessage(ex, defaultMessage),
                 request,
-                "Authentication failure: account locked (wrapped)",
-                false
-        );
-    }
-
-    private ResponseEntity<Map<String, Object>> createEmailNotVerifiedResponse(
-            Throwable cause,
-            WebRequest request
-    ) {
-        return problemBuilder.build(
-                HttpStatus.FORBIDDEN,
-                "Email not verified",
-                problemBuilder.resolveMessage(
-                        cause,
-                        "Please verify your email address before logging in."
-                ),
-                request,
-                "Authentication failure: email not verified (wrapped)",
-                false
-        );
-    }
-
-    private ResponseEntity<Map<String, Object>> createBadCredentialsResponse(
-            Throwable cause,
-            WebRequest request
-    ) {
-        return problemBuilder.build(
-                HttpStatus.UNAUTHORIZED,
-                "Invalid credentials",
-                problemBuilder.resolveMessage(cause, "The email or password you entered is incorrect."),
-                request,
-                "Authentication failure: invalid credentials (wrapped)",
-                false
+                logMessage,
+                includeStackTrace
         );
     }
 }
