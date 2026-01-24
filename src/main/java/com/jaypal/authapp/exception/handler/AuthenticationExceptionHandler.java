@@ -8,10 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
-import org.springframework.security.authentication.InternalAuthenticationServiceException;
-import org.springframework.security.authentication.LockedException;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.WebRequest;
 
@@ -23,6 +21,10 @@ import java.util.Map;
 public class AuthenticationExceptionHandler {
 
     private final ApiErrorResponseBuilder problemBuilder;
+
+    // -------------------------------------------
+    // Standard handlers
+    // -------------------------------------------
 
     public ResponseEntity<Map<String, Object>> handleBadCredentials(
             BadCredentialsException ex,
@@ -99,11 +101,27 @@ public class AuthenticationExceptionHandler {
         );
     }
 
+    // -------------------------------------------
+    // InternalAuthenticationServiceException handler
+    // -------------------------------------------
+
     public ResponseEntity<Map<String, Object>> handleInternalAuthenticationServiceException(
             InternalAuthenticationServiceException ex,
             WebRequest request
     ) {
         Throwable cause = ex.getCause();
+
+        // --- Check wrapped causes ---
+        if (cause instanceof AuthenticatedUserMissingException userMissing) {
+            return handleWrapped(
+                    userMissing,
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication context invalid",
+                    "Authentication state is no longer valid. Please log in again.",
+                    request,
+                    "Authenticated user missing from database (wrapped)"
+            );
+        }
 
         if (isAccountDisabled(cause)) {
             return handleWrapped(
@@ -162,6 +180,10 @@ public class AuthenticationExceptionHandler {
         );
     }
 
+    // -------------------------------------------
+    // Helpers
+    // -------------------------------------------
+
     private boolean isAccountDisabled(Throwable cause) {
         return cause instanceof DisabledException;
     }
@@ -201,6 +223,58 @@ public class AuthenticationExceptionHandler {
                 request,
                 logMessage,
                 includeStackTrace
+        );
+    }
+
+    // -------------------------------------------
+    // Generic AuthenticationException handler
+    // -------------------------------------------
+    public ResponseEntity<Map<String, Object>> handleAuthenticationException(
+            AuthenticationException ex,
+            WebRequest request
+    ) {
+        if (ex instanceof BadCredentialsException badCredentials) {
+            return handleBadCredentials(badCredentials, request);
+        }
+
+        if (ex instanceof InternalAuthenticationServiceException internal) {
+            return handleInternalAuthenticationServiceException(internal, request);
+        }
+
+        if (ex instanceof InsufficientAuthenticationException insufficient) {
+            return buildResponse(
+                    HttpStatus.UNAUTHORIZED,
+                    "Full authentication required",
+                    insufficient,
+                    "You must be fully authenticated to access this resource.",
+                    request,
+                    "Authentication failure: insufficient authentication",
+                    false
+            );
+        }
+
+        if (ex instanceof AuthenticationCredentialsNotFoundException credentialsNotFound) {
+            return buildResponse(
+                    HttpStatus.UNAUTHORIZED,
+                    "Credentials missing",
+                    credentialsNotFound,
+                    "Authentication credentials were not provided.",
+                    request,
+                    "Authentication failure: credentials not found",
+                    false
+            );
+        }
+
+        // Default fallback for any other AuthenticationException
+        log.warn("Unhandled AuthenticationException type: {}", ex.getClass().getSimpleName(), ex);
+        return buildResponse(
+                HttpStatus.UNAUTHORIZED,
+                "Authentication failed",
+                ex,
+                "Authentication failed. Please try again.",
+                request,
+                "Authentication failure: unknown type",
+                true
         );
     }
 }

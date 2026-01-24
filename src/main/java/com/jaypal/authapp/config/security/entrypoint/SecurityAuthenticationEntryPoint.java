@@ -1,11 +1,11 @@
 package com.jaypal.authapp.config.security.entrypoint;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jaypal.authapp.exception.handler.AuthenticationExceptionHandler;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
@@ -19,6 +19,7 @@ import java.util.Map;
 public class SecurityAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     private final AuthenticationExceptionHandler authenticationExceptionHandler;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public void commence(
@@ -28,18 +29,12 @@ public class SecurityAuthenticationEntryPoint implements AuthenticationEntryPoin
     ) throws IOException {
 
         ResponseEntity<Map<String, Object>> entity =
-                authenticationExceptionHandler.handleInternalAuthenticationServiceException(
-                        wrap(exception),
+                authenticationExceptionHandler.handleAuthenticationException(
+                        exception,
                         new ServletWebRequest(request)
                 );
 
         writeResponse(response, entity);
-    }
-
-    private InternalAuthenticationServiceException wrap(AuthenticationException ex) {
-        return ex instanceof InternalAuthenticationServiceException internal
-                ? internal
-                : new InternalAuthenticationServiceException(ex.getMessage(), ex);
     }
 
     private void writeResponse(
@@ -51,9 +46,12 @@ public class SecurityAuthenticationEntryPoint implements AuthenticationEntryPoin
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
+        entity.getHeaders().forEach((k, v) ->
+                response.addHeader(k, String.join(",", v))
+        );
+
         response.getWriter().write(
-                new com.fasterxml.jackson.databind.ObjectMapper()
-                        .writeValueAsString(entity.getBody())
+                objectMapper.writeValueAsString(entity.getBody())
         );
         response.getWriter().flush();
     }
