@@ -3,12 +3,8 @@ package com.jaypal.authapp.exception.audit;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
-
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,7 +31,7 @@ public class AuthorizationDetailsBuilder {
             String path = requestPathExtractor.extract(request);
 
             Map<String, Object> details = Map.of(
-                    "permissions", List.copyOf(permissions),
+                    "missing permissions", List.copyOf(permissions),
                     "path", path
             );
 

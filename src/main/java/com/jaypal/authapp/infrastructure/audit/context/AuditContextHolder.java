@@ -36,7 +36,9 @@ public final class AuditContextHolder {
     /* ===================== Outcome APIs ===================== */
 
     public static void markNoOp() {
-        NO_OP.set(true);
+        if (!isRejection()) {
+            NO_OP.set(true);
+        }
     }
 
     public static boolean isNoOp() {

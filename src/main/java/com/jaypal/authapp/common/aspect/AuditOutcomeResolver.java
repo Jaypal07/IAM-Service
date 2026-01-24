@@ -2,40 +2,38 @@ package com.jaypal.authapp.common.aspect;
 
 import com.jaypal.authapp.domain.audit.entity.AuditOutcome;
 import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
+import com.jaypal.authapp.infrastructure.audit.state.AuditOutcomePolicy;
+import com.jaypal.authapp.infrastructure.audit.state.AuditSignal;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/**
- * Dedicated component for outcome determination.
- * Follows Single Responsibility Principle.
- */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AuditOutcomeResolver {
 
-    public AuditOutcome determineOutcome(Object result) {
+    private final AuditOutcomePolicy stateMachine;
 
-        // 1️⃣ Explicit business REJECTION (always wins)
-        if (AuditContextHolder.isRejection()) {
-            log.debug(
-                    "Audit outcome overridden to REJECTION via AuditContextHolder, reason={}",
-                    AuditContextHolder.getRejectionReason()
-            );
-            return AuditOutcome.REJECTION;
-        }
+    public AuditOutcome fromResult(Object result) {
+        return stateMachine.resolve(
+                new AuditSignal(
+                        result,
+                        null,
+                        AuditContextHolder.isNoOp(),
+                        AuditContextHolder.isRejection()
+                )
+        );
+    }
 
-        // 2️⃣ Explicit business NO_OP
-        if (AuditContextHolder.isNoOp()) {
-            log.debug("Audit outcome overridden to NO_OP via AuditContextHolder");
-            return AuditOutcome.NO_OP;
-        }
-
-        // 3️⃣ Return-based NO_OP (legacy / safety)
-        if (result == null || (result instanceof Boolean b && !b)) {
-            return AuditOutcome.NO_OP;
-        }
-
-        // 4️⃣ Default success
-        return AuditOutcome.SUCCESS;
+    public AuditOutcome fromException(Throwable ex) {
+        return stateMachine.resolve(
+                new AuditSignal(
+                        null,
+                        ex,
+                        AuditContextHolder.isNoOp(),
+                        AuditContextHolder.isRejection()
+                )
+        );
     }
 }

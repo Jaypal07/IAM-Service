@@ -3,10 +3,7 @@ package com.jaypal.authapp.common.aspect;
 import com.jaypal.authapp.common.annotation.AuthAudit;
 import com.jaypal.authapp.domain.audit.entity.*;
 import com.jaypal.authapp.domain.audit.service.AuthAuditService;
-import com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException;
 import com.jaypal.authapp.dto.audit.AuditRequestContext;
-import com.jaypal.authapp.exception.auth.EmailAlreadyVerifiedException;
-import com.jaypal.authapp.exception.auth.EmailNotRegisteredException;
 import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
 import com.jaypal.authapp.infrastructure.audit.resolver.FailureReasonResolver;
 import com.jaypal.authapp.infrastructure.audit.resolver.IdentityResolver;
@@ -39,12 +36,11 @@ public class AuthAuditAspect {
 
     @AfterReturning(pointcut = "@annotation(authAudit)", returning = "result")
     public void afterSuccess(JoinPoint joinPoint, AuthAudit authAudit, Object result) {
-        AuditOutcome outcome = outcomeResolver.determineOutcome(result);
-        AuthFailureReason failureReason = null;
-
-        if (outcome == AuditOutcome.REJECTION) {
-            failureReason = AuditContextHolder.getRejectionReason();
-        }
+        AuditOutcome outcome = outcomeResolver.fromResult(result);
+        AuthFailureReason failureReason =
+                outcome == AuditOutcome.REJECTION
+                        ? AuditContextHolder.getRejectionReason()
+                        : null;
 
         log.debug(
                 "AuthAudit SUCCESS intercepted: event={}, resolvedOutcome={}, method={}",
@@ -70,12 +66,7 @@ public class AuthAuditAspect {
             return;
         }
 
-        // Idempotent NO_OP cases
-        if (isIdempotentNoOp(ex, authAudit)) {
-            record(joinPoint, authAudit, null, null, AuditOutcome.NO_OP);
-            return;
-        }
-
+        AuditOutcome outcome = outcomeResolver.fromException(ex);
         AuthFailureReason reason = failureReasonResolver.resolve(ex);
 
         log.debug(
@@ -85,40 +76,12 @@ public class AuthAuditAspect {
                 ex.getClass().getSimpleName()
         );
 
-        record(joinPoint, authAudit, null, reason, AuditOutcome.FAILURE);
+        record(joinPoint, authAudit, null, reason, outcome);
     }
 
     private boolean isAuthorizationException(Throwable ex) {
         return ex instanceof AccessDeniedException
                 || ex instanceof AuthorizationDeniedException;
-    }
-
-    private boolean isIdempotentNoOp(Throwable ex, AuthAudit authAudit) {
-        if (ex instanceof EmailAlreadyVerifiedException) {
-            log.info(
-                    "AuthAudit NO_OP (idempotent): event={}, reason=EMAIL_ALREADY_VERIFIED",
-                    authAudit.event()
-            );
-            return true;
-        }
-
-        if (ex instanceof EmailAlreadyExistsException) {
-            log.info(
-                    "AuthAudit NO_OP (idempotent): event={}, reason=EMAIL_ALREADY_EXISTS",
-                    authAudit.event()
-            );
-            return true;
-        }
-
-        if (ex instanceof EmailNotRegisteredException) {
-            log.info(
-                    "AuthAudit NO_OP (idempotent): event={}, reason=EMAIL_NOT_REGISTERED",
-                    authAudit.event()
-            );
-            return true;
-        }
-
-        return false;
     }
 
     private void record(

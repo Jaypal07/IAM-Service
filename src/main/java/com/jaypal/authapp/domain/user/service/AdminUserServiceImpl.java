@@ -1,5 +1,7 @@
 package com.jaypal.authapp.domain.user.service;
 
+import com.jaypal.authapp.domain.audit.entity.AuthFailureReason;
+import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
 import com.jaypal.authapp.service.auth.EmailVerificationService;
 import com.jaypal.authapp.config.properties.PasswordPolicy;
 import com.jaypal.authapp.dto.user.AdminUserCreateRequest;
@@ -87,6 +89,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         } catch (DataIntegrityViolationException ex) {
             log.warn("Duplicate email during admin create. email={}", req.email());
+            AuditContextHolder.markRejection(AuthFailureReason.EMAIL_ALREADY_EXISTS);
             throw new EmailAlreadyExistsException();
         }
     }
