@@ -1,6 +1,7 @@
 package com.jaypal.authapp.exception.handler;
 
 import com.jaypal.authapp.domain.user.exception.UserAccountDisabledException;
+import com.jaypal.authapp.domain.user.exception.UserAlreadyDisable;
 import com.jaypal.authapp.exception.auth.AuthenticatedUserMissingException;
 import com.jaypal.authapp.exception.auth.EmailNotVerifiedException;
 import com.jaypal.authapp.exception.response.ApiErrorResponseBuilder;
@@ -101,6 +102,17 @@ public class AuthenticationExceptionHandler {
         );
     }
 
+    public ResponseEntity<Map<String, Object>> handleUserAlreadyDisable(UserAlreadyDisable ex, WebRequest request) {
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "Account Disable",
+                ex,
+                "User account is already disable.",
+                request,
+                "User already disable",
+                false
+        );
+    }
     // -------------------------------------------
     // InternalAuthenticationServiceException handler
     // -------------------------------------------
@@ -277,4 +289,5 @@ public class AuthenticationExceptionHandler {
                 true
         );
     }
+
 }

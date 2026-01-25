@@ -1,6 +1,7 @@
 package com.jaypal.authapp.domain.user.service;
 
 import com.jaypal.authapp.domain.audit.entity.AuthFailureReason;
+import com.jaypal.authapp.domain.user.exception.UserAlreadyDisable;
 import com.jaypal.authapp.infrastructure.audit.context.AuditContextHolder;
 import com.jaypal.authapp.service.auth.EmailVerificationService;
 import com.jaypal.authapp.config.properties.PasswordPolicy;
@@ -66,6 +67,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                     RoleType roleType = RoleType.valueOf(role);
 
                     if (roleType.isOwner()) {
+                        AuditContextHolder.markNoOp();
                         throw new AccessDeniedException(
                                 "Admin is not allowed to assign ROLE_OWNER"
                         );
@@ -173,12 +175,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 3. Enforce ROLE_OWNER restrictions
         // ---------------------------------------------------------------------
         if (rolesToAdd.stream().anyMatch(RoleType::isOwner)) {
+            AuditContextHolder.markNoOp();
             throw new AccessDeniedException(
                     "Admin is not allowed to assign ROLE_OWNER"
             );
         }
 
         if (rolesToRemove.stream().anyMatch(RoleType::isOwner)) {
+            AuditContextHolder.markNoOp();
             throw new AccessDeniedException(
                     "ROLE_OWNER cannot be removed"
             );
@@ -242,6 +246,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         log.warn("Admin disabling user. userId={}", userId);
 
         User user = requireUser(userId);
+        if (!user.isEnabled()){
+            AuditContextHolder.markNoOp();
+//            throw new UserAlreadyDisable();
+        }
         user.disable();
         user.bumpPermissionVersion();
         userRepository.save(user);

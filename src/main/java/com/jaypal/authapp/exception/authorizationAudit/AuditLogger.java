@@ -1,4 +1,4 @@
-package com.jaypal.authapp.exception.audit;
+package com.jaypal.authapp.exception.authorizationAudit;
 
 import com.jaypal.authapp.domain.audit.entity.*;
 import com.jaypal.authapp.domain.audit.service.AuthAuditService;

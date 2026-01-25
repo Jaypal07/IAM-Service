@@ -1,4 +1,4 @@
-package com.jaypal.authapp.exception.audit;
+package com.jaypal.authapp.exception.authorizationAudit;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.ServletWebRequest;

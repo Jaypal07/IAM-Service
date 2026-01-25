@@ -1,6 +1,6 @@
 package com.jaypal.authapp.exception.handler;
 
-import com.jaypal.authapp.exception.audit.AuditLogger;
+import com.jaypal.authapp.exception.authorizationAudit.AuditLogger;
 import com.jaypal.authapp.exception.response.ApiErrorResponseBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

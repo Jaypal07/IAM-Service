@@ -1,26 +1,35 @@
 package com.jaypal.authapp.exception;
 
-import com.jaypal.authapp.exception.audit.AuditLogger;
+import com.jaypal.authapp.domain.token.exception.*;
+import com.jaypal.authapp.domain.user.exception.*;
+import com.jaypal.authapp.exception.auth.*;
+import com.jaypal.authapp.exception.authorizationAudit.AuditLogger;
 import com.jaypal.authapp.exception.handler.*;
 import com.jaypal.authapp.exception.response.ApiErrorResponseBuilder;
+import com.jaypal.authapp.infrastructure.ratelimit.RateLimitExceededException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
 
 /**
  * Refactored GlobalExceptionHandler following SOLID principles.
  * Delegates exception handling to specialized handler components.
- *
- * Benefits:
- * - Single Responsibility: Each handler focuses on one exception category
- * - Open/Closed: Easy to add new exception handlers without modifying this class
- * - Testability: Individual handlers can be unit tested in isolation
- * - Maintainability: Clear separation of concerns
  */
 @Slf4j
 @RestControllerAdvice
@@ -58,49 +67,57 @@ public class GlobalExceptionHandler {
        AUTHENTICATION
        ===================== */
 
-    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(
-            org.springframework.security.authentication.BadCredentialsException ex,
+            BadCredentialsException ex,
             WebRequest request
     ) {
         return authenticationHandler.handleBadCredentials(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.exception.auth.AuthenticatedUserMissingException.class)
+    @ExceptionHandler(AuthenticatedUserMissingException.class)
     public ResponseEntity<Map<String, Object>> handleAuthenticatedUserMissing(
-            com.jaypal.authapp.exception.auth.AuthenticatedUserMissingException ex,
+            AuthenticatedUserMissingException ex,
             WebRequest request
     ) {
         return authenticationHandler.handleAuthenticatedUserMissing(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.domain.user.exception.UserAccountDisabledException.class)
+    @ExceptionHandler(UserAccountDisabledException.class)
     public ResponseEntity<Map<String, Object>> handleAccountDisabled(
-            com.jaypal.authapp.domain.user.exception.UserAccountDisabledException ex,
+            UserAccountDisabledException ex,
             WebRequest request
     ) {
         return authenticationHandler.handleAccountDisabled(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.exception.auth.EmailNotVerifiedException.class)
+    @ExceptionHandler(UserAlreadyDisable.class)
+    public ResponseEntity<Map<String, Object>> handleUserAlreadyDisable(
+            UserAlreadyDisable ex,
+            WebRequest request
+    ){
+        return authenticationHandler.handleUserAlreadyDisable(ex, request);
+    }
+
+    @ExceptionHandler(EmailNotVerifiedException.class)
     public ResponseEntity<Map<String, Object>> handleEmailNotVerified(
-            com.jaypal.authapp.exception.auth.EmailNotVerifiedException ex,
+            EmailNotVerifiedException ex,
             WebRequest request
     ) {
         return authenticationHandler.handleEmailNotVerified(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.security.authentication.LockedException.class)
+    @ExceptionHandler(LockedException.class)
     public ResponseEntity<Map<String, Object>> handleAccountLocked(
-            org.springframework.security.authentication.LockedException ex,
+            LockedException ex,
             WebRequest request
     ) {
         return authenticationHandler.handleAccountLocked(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.security.authentication.InternalAuthenticationServiceException.class)
+    @ExceptionHandler(InternalAuthenticationServiceException.class)
     public ResponseEntity<Map<String, Object>> handleInternalAuthenticationServiceException(
-            org.springframework.security.authentication.InternalAuthenticationServiceException ex,
+            InternalAuthenticationServiceException ex,
             WebRequest request
     ) {
         return authenticationHandler.handleInternalAuthenticationServiceException(ex, request);
@@ -110,25 +127,25 @@ public class GlobalExceptionHandler {
        EMAIL VERIFICATION
        ===================== */
 
-    @ExceptionHandler(com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException.class)
+    @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<Map<String, Object>> handleEmailAlreadyExists(
-            com.jaypal.authapp.domain.user.exception.EmailAlreadyExistsException ex,
+            EmailAlreadyExistsException ex,
             WebRequest request
     ) {
         return emailVerificationHandler.handleEmailAlreadyExists(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.exception.auth.EmailAlreadyVerifiedException.class)
+    @ExceptionHandler(EmailAlreadyVerifiedException.class)
     public ResponseEntity<Map<String, Object>> handleAlreadyVerified(
-            com.jaypal.authapp.exception.auth.EmailAlreadyVerifiedException ex,
+            EmailAlreadyVerifiedException ex,
             WebRequest request
     ) {
         return emailVerificationHandler.handleEmailAlreadyVerified(ex, request);
     }
 
     @ExceptionHandler({
-            com.jaypal.authapp.exception.auth.VerificationTokenExpiredException.class,
-            com.jaypal.authapp.exception.auth.VerificationTokenInvalidException.class
+            VerificationTokenExpiredException.class,
+            VerificationTokenInvalidException.class
     })
     public ResponseEntity<Map<String, Object>> handleVerificationTokenFailures(
             RuntimeException ex,
@@ -137,22 +154,22 @@ public class GlobalExceptionHandler {
         return emailVerificationHandler.handleVerificationTokenFailures(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.exception.auth.EmailNotRegisteredException.class)
+    @ExceptionHandler(EmailNotRegisteredException.class)
     public ResponseEntity<Void> swallowEmailNotRegistered() {
         return emailVerificationHandler.handleEmailNotRegistered();
     }
 
-    @ExceptionHandler(com.jaypal.authapp.exception.auth.SilentEmailVerificationResendException.class)
+    @ExceptionHandler(SilentEmailVerificationResendException.class)
     public ResponseEntity<Void> handleSilentVerificationResend(
-            com.jaypal.authapp.exception.auth.SilentEmailVerificationResendException ex,
+            SilentEmailVerificationResendException ex,
             WebRequest request
     ) {
         return emailVerificationHandler.handleSilentVerificationResend(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.exception.auth.EmailDeliveryFailedException.class)
+    @ExceptionHandler(EmailDeliveryFailedException.class)
     public ResponseEntity<Map<String, Object>> handleEmailDeliveryFailed(
-            com.jaypal.authapp.exception.auth.EmailDeliveryFailedException ex,
+            EmailDeliveryFailedException ex,
             WebRequest request
     ) {
         return emailVerificationHandler.handleEmailDeliveryFailed(ex, request);
@@ -163,9 +180,9 @@ public class GlobalExceptionHandler {
        ===================== */
 
     @ExceptionHandler({
-            com.jaypal.authapp.exception.auth.PasswordPolicyViolationException.class,
-            com.jaypal.authapp.exception.auth.PasswordResetTokenInvalidException.class,
-            com.jaypal.authapp.exception.auth.PasswordResetTokenExpiredException.class
+            PasswordPolicyViolationException.class,
+            PasswordResetTokenInvalidException.class,
+            PasswordResetTokenExpiredException.class
     })
     public ResponseEntity<Map<String, Object>> handlePasswordFailures(
             RuntimeException ex,
@@ -175,13 +192,13 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            com.jaypal.authapp.domain.token.exception.RefreshTokenExpiredException.class,
-            com.jaypal.authapp.domain.token.exception.RefreshTokenNotFoundException.class,
-            com.jaypal.authapp.domain.token.exception.RefreshTokenRevokedException.class,
-            com.jaypal.authapp.domain.token.exception.RefreshTokenUserMismatchException.class,
-            com.jaypal.authapp.domain.token.exception.RefreshTokenException.class,
-            com.jaypal.authapp.exception.auth.InvalidRefreshTokenException.class,
-            com.jaypal.authapp.exception.auth.MissingRefreshTokenException.class
+            RefreshTokenExpiredException.class,
+            RefreshTokenNotFoundException.class,
+            RefreshTokenRevokedException.class,
+            RefreshTokenUserMismatchException.class,
+            RefreshTokenException.class,
+            InvalidRefreshTokenException.class,
+            MissingRefreshTokenException.class
     })
     public ResponseEntity<Map<String, Object>> handleRefreshTokenFailures(
             RuntimeException ex,
@@ -194,15 +211,15 @@ public class GlobalExceptionHandler {
        USER DOMAIN
        ===================== */
 
-    @ExceptionHandler(com.jaypal.authapp.domain.user.exception.InvalidRoleOperationException.class)
+    @ExceptionHandler(InvalidRoleOperationException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidRoleOperation(
-            com.jaypal.authapp.domain.user.exception.InvalidRoleOperationException ex,
+            InvalidRoleOperationException ex,
             WebRequest request
     ) {
         return userDomainHandler.handleInvalidRoleOperation(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.domain.user.exception.ResourceNotFoundException.class)
+    @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFound(
             com.jaypal.authapp.domain.user.exception.ResourceNotFoundException ex,
             WebRequest request
@@ -214,17 +231,17 @@ public class GlobalExceptionHandler {
        VALIDATION
        ===================== */
 
-    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(
-            org.springframework.web.bind.MethodArgumentNotValidException ex,
+            MethodArgumentNotValidException ex,
             WebRequest request
     ) {
         return validationHandler.handleMethodArgumentNotValid(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<Map<String, Object>> handleHandlerMethodValidation(
-            org.springframework.web.method.annotation.HandlerMethodValidationException ex,
+            HandlerMethodValidationException ex,
             WebRequest request
     ) {
         return validationHandler.handleHandlerMethodValidation(ex, request);
@@ -238,9 +255,9 @@ public class GlobalExceptionHandler {
         return validationHandler.handleConstraintViolation(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleMethodArgumentTypeMismatch(
-            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex,
+            MethodArgumentTypeMismatchException ex,
             WebRequest request
     ) {
         return validationHandler.handleMethodArgumentTypeMismatch(ex, request);
@@ -250,41 +267,41 @@ public class GlobalExceptionHandler {
        INFRASTRUCTURE
        ===================== */
 
-    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(
-            org.springframework.dao.DataIntegrityViolationException ex,
+            DataIntegrityViolationException ex,
             WebRequest request
     ) {
         return infrastructureHandler.handleDataIntegrity(ex, request);
     }
 
-    @ExceptionHandler(com.jaypal.authapp.infrastructure.ratelimit.RateLimitExceededException.class)
+    @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<Map<String, Object>> handleRateLimit(
-            com.jaypal.authapp.infrastructure.ratelimit.RateLimitExceededException ex,
+            RateLimitExceededException ex,
             WebRequest request
     ) {
         return infrastructureHandler.handleRateLimit(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNoResource(
-            org.springframework.web.servlet.resource.NoResourceFoundException ex,
+            NoResourceFoundException ex,
             WebRequest request
     ) {
         return infrastructureHandler.handleNoResource(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleNotReadable(
-            org.springframework.http.converter.HttpMessageNotReadableException ex,
+            HttpMessageNotReadableException ex,
             WebRequest request
     ) {
         return infrastructureHandler.handleHttpMessageNotReadable(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<Map<String, Object>> handleMissingRequestParam(
-            org.springframework.web.bind.MissingServletRequestParameterException ex,
+            MissingServletRequestParameterException ex,
             WebRequest request
     ) {
         return infrastructureHandler.handleMissingRequestParameter(ex, request);
@@ -298,9 +315,9 @@ public class GlobalExceptionHandler {
         return infrastructureHandler.handleIllegalArgument(ex, request);
     }
 
-    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<org.springframework.http.ProblemDetail> handleMethodNotSupported(
-            org.springframework.web.HttpRequestMethodNotSupportedException ex,
+            HttpRequestMethodNotSupportedException ex,
             WebRequest request
     ) {
         return infrastructureHandler.handleMethodNotSupported(ex, request);

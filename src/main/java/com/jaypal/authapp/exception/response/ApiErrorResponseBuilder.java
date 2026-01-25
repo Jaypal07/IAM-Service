@@ -1,6 +1,6 @@
 package com.jaypal.authapp.exception.response;
 
-import com.jaypal.authapp.exception.audit.RequestPathExtractor;
+import com.jaypal.authapp.exception.authorizationAudit.RequestPathExtractor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

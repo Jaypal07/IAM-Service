@@ -1,4 +1,4 @@
-package com.jaypal.authapp.exception.audit;
+package com.jaypal.authapp.exception.authorizationAudit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

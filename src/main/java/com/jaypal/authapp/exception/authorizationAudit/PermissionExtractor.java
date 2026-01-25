@@ -1,4 +1,4 @@
-package com.jaypal.authapp.exception.audit;
+package com.jaypal.authapp.exception.authorizationAudit;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authorization.AuthorizationDeniedException;
