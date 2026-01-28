@@ -1,327 +1,282 @@
-# Scalable Identity and Access Management (IAM) Service
+# Scalable Identity and Access Management (IAM) Service  
+**Production-Grade IAM Platform | Spring Boot | Security | Fail-Fast Engineering**  
 
-A **production-inspired IAM service** built with **Java 21 and Spring Boot 3**, designed to be used as a **drop-in authentication and authorization service** for backend systems.
+I built this project as part of my transition from **QA to Java backend engineering**.  
+It reflects how I think about systems: **break early, fail fast, validate aggressively, and secure everything by default**.
 
-This project focuses on **correct security primitives**, **explicit token lifecycle management**, and **clean domain-driven structure**.
-
-This is not a demo. It is an IAM system built the way real systems are built.
+This is not a tutorial project.  
+It is a **real Identity and Access Management (IAM) service** designed with **production-grade Spring Boot practices**, **security-first architecture**, and **explicit failure handling**.
 
 ---
 
-## Why This Project
+## Why I Built This
 
-Authentication systems fail quietly.  
-Most examples online cut corners. This one does not.
+Coming from QA, I am naturally focused on **edge cases, failure paths, and correctness under stress**.  
+Instead of avoiding failures, I designed this system to:
 
-This service demonstrates:
-- Short-lived access tokens
-- Stateful refresh tokens with rotation
-- OAuth2 login with real providers
-- Role and permission based authorization
-- Structured authentication audit logging
+- Detect invalid states early  
+- Fail loudly instead of silently  
+- Treat negative scenarios as first-class behavior  
+- Enforce invariants across authentication and authorization  
+- Prefer correctness over shortcuts  
 
-The intent is to show **security judgment**, not framework usage.
+This project represents how I **test like a QA engineer but build like a backend engineer**.
+
+---
+
+## My Engineering Mindset: Fail Fast, Secure First
+
+In this codebase, I deliberately:
+
+- Fail fast when security invariants break  
+- Avoid hidden session behavior  
+- Model token lifecycle states explicitly  
+- Reject ambiguous authentication outcomes  
+- Use defensive exception taxonomy instead of generic errors  
+- Design flows that are predictable, testable, and debuggable  
+
+I care more about **correct behavior than passing demos**.
 
 ---
 
 ## High-Level Architecture
 
 ```text
-+-------------+        +------------------+
-|   Client    | -----> |     Auth API     |
-| (Web/Mobile)|        |  Spring Boot     |
-+-------------+        +------------------+
-                               |
-                               v
-                  +---------------------------+
-                  | Spring Security Filters   |
-                  | - JWT Authentication      |
-                  | - OAuth2 Login            |
-                  +---------------------------+
-                               |
-                               v
-           +-------------------------------------------+
-           | Application Layer                         |
-           | - AuthService                             |
-           | - OAuthLoginService                       |
-           | - RefreshTokenService                     |
-           | - User & Role Services                    |
-           +-------------------------------------------+
-                               |
-                               v
-           +-------------------------------------------+
-           | Persistence Layer                         |
-           | - PostgreSQL                              |
-           | - Users, Roles, Permissions               |
-           | - Refresh Tokens                          |
-           | - Auth Audit Logs                         |
-           +-------------------------------------------+
-   ```
++------------------------+        +---------------------------+
+| Client (Web / Mobile)  | -----> | Auth API (Spring Boot)    |
++------------------------+        +---------------------------+
+                                           |
+                                           v
+                         +-------------------------------------+
+                         | Spring Security Filter Chain        |
+                         | - JWT Authentication Filter         |
+                         | - OAuth2 Login                      |
+                         | - Rate Limiting Filter              |
+                         +-------------------------------------+
+                                           |
+                                           v
+             +---------------------------------------------------+
+             | Application & Domain Services                     |
+             | - Auth Service                                    |
+             | - Token Issuer & Refresh Lifecycle                |
+             | - OAuth Login Service                             |
+             | - RBAC Authorization                              |
+             | - Email Verification & Password Reset             |
+             | - Audit Logging & Security Telemetry              |
+             +---------------------------------------------------+
+                                           |
+                                           v
+             +---------------------------------------------------+
+             | Persistence & Infrastructure Layer               |
+             | - PostgreSQL (Users, Roles, Tokens, Audit)        |
+             | - Redis (Rate Limits, Cache)                      |
+             +---------------------------------------------------+
+```
 
 ---
 
-## Project Structure
+## Domain-Driven Folder Structure
 
-The project is organized by **domain**, not by technical layers.  
-This keeps security, authorization, and authentication concerns isolated and scalable.
+I organized the project by **domain instead of technical layers** to keep responsibilities clear and scalable.
 
 ```text
 src/main/java/com/jaypal/authapp
-├── audit
-│   ├── annotation        # Audit annotations
-│   ├── application       # Audit service logic
-│   ├── aspect            # AOP-based audit interception
-│   ├── context           # Audit context propagation
-│   ├── domain            # Audit events and enums
-│   ├── persistence       # Audit entities and repositories
-│   ├── resolver          # Subject and failure resolution
-│   └── validation        # Audit validation matrix
+├── api                    # REST Controllers (Auth, User, Admin)
+│   ├── auth
+│   ├── user
+│   └── admin
 │
-├── auth
-│   ├── api               # Auth REST controllers
-│   ├── application       # Authentication services
-│   ├── dto               # Request and response models
-│   ├── event             # Domain events
-│   ├── exception         # Auth-specific exceptions
-│   ├── facade            # Web-facing auth orchestration
-│   ├── infrastructure    # Cookies, email, token extraction
-│   └── listener          # Event listeners
+├── domain                 # Core business domains
+│   ├── audit              # Auth audit logs & invariants
+│   ├── token              # Refresh token lifecycle & security
+│   └── user               # Users, Roles, Permissions
 │
-├── oauth
-│   ├── application       # OAuth login flow
-│   ├── dto               # OAuth result models
-│   ├── handler           # Success and failure handlers
-│   ├── mapper            # Provider-specific user mappers
-│   └── model             # Normalized OAuth user model
+├── service                # Authentication & OAuth workflows
+│   ├── auth               # Login, logout, refresh, verification
+│   ├── oauth              # OAuth federation services
+│   └── operations         # Auth orchestration flows
 │
-├── security
-│   ├── bootstrap         # Permission initialization
-│   ├── config            # Security filter chains
-│   ├── filter            # JWT authentication filter
-│   ├── jwt               # JWT utilities and services
-│   ├── principal         # Authenticated principal
-│   └── userdetails       # Custom UserDetails service
+├── infrastructure         # External integrations
+│   ├── audit              # Audit context & resolution
+│   ├── email              # Email delivery & templates
+│   ├── oauth              # OAuth provider handlers
+│   ├── ratelimit          # Redis-backed rate limiting
+│   ├── security           # Filters, JWT, token extraction
+│   └── utils              # Cookie & token utilities
 │
-├── token
-│   ├── application       # Refresh token lifecycle
-│   ├── exception         # Token-related exceptions
-│   ├── model             # Refresh token entity
-│   └── repository        # Refresh token persistence
-│
-├── user
-│   ├── api               # User and admin controllers
-│   ├── application       # User, role, permission services
-│   ├── dto               # User and role DTOs
-│   ├── exception         # User domain exceptions
-│   ├── mapper            # Entity to DTO mapping
-│   ├── model             # User, Role, Permission entities
-│   └── repository        # User-related repositories
-│
-├── shared
-│   └── exception         # Global and security exceptions
-│
+├── config                 # Security, Redis, Async, Web config
+├── mapper                 # DTO and OAuth user mappers
+├── dto                    # Request/response models
+├── exception              # Defensive exception taxonomy
+├── event                  # Domain events
+├── listener               # Async event listeners
 └── AuthAppApplication.java
+```
 
-   ```
-## Design Choices
-
-- Stateless API  
-- Explicit token state  
-- Database-backed refresh control  
-- No hidden session behavior  
+This structure prevents package sprawl and supports **long-term maintainability**.
 
 ---
 
-## Core Features
+## What This System Does
 
-### Authentication
+### Authentication & Identity
 - Email and password login  
-- OAuth2 login using Google and GitHub  
+- OAuth2 login (Google and GitHub)  
 - BCrypt password hashing  
-- Custom user provisioning on first OAuth login  
-
-### Token Management
-- JWT access tokens with 15 minute TTL  
-- Refresh tokens with 7 day TTL  
-- Refresh tokens stored in database  
-- Rotation implemented on every refresh  
-- Token reuse detection  
-- Optimistic locking to prevent race conditions  
-
-### Logout
-- Stateless access token handling  
-- Explicit refresh token revocation  
-- Single session logout  
-- Global logout for user or admin actions  
-
-### Authorization
-- Role-Based Access Control  
-- Explicit User, Role, Permission entities  
-- Many-to-many mappings  
-- Method-level enforcement using `@PreAuthorize`  
-- Central permission bootstrap  
-
-### Audit Logging
-- Authentication events persisted as security data  
-
-**Captures**
-- Login success and failure  
-- Logout  
-- Token refresh  
-
-**Includes**
-- User ID  
-- Provider  
-- Failure reason  
-- IP address  
-- User-Agent  
-- Timestamp  
-
-Audit logs are structured. Not log spam.
+- Email verification workflow  
+- Password reset with secure token validation  
+- Token introspection API  
 
 ---
 
-## Technology Stack
+### Token Lifecycle & Session Security
 
-- Java 21  
-- Spring Boot 3.4.x  
-- Spring Security 6.x  
-- OAuth2 Client  
-- PostgreSQL  
-- JPA and Hibernate  
-- Maven  
+**Access Tokens**
 - JWT signed with HS256  
-- Stateless API design  
+- 15-minute TTL  
+- Stateless validation  
 
-Docker and CI are planned intentionally. Not rushed.
+**Refresh Tokens**
+- Stored in PostgreSQL  
+- Rotated on every refresh  
+- Replay and reuse detection  
+- Optimistic locking to prevent race conditions  
+- Forced logout and token revocation  
+- Token hashing to reduce breach impact  
 
----
-
-## Authentication Flow
-
-### Login
-1. User authenticates using credentials or OAuth2  
-2. Access token is issued  
-3. Refresh token is created and persisted  
-
-### Token Refresh
-1. Refresh token is validated  
-2. Previous token is revoked  
-3. New refresh token is issued  
-4. New access token is generated  
-
-### Token Reuse Protection
-- Reused or revoked refresh tokens are rejected  
-- Race conditions handled via optimistic locking  
-- Compromised tokens are invalidated immediately  
-
-This is real refresh token rotation. Not marketing.
+This implements **real refresh token rotation**, not simplified stateless refresh.
 
 ---
 
-## OAuth2 Design
+## Abuse Prevention & Rate Limiting
 
-- Authorization Code flow  
-- Provider-aware user mapping  
-- Explicit success and failure handling  
-- OAuth treated as authentication input, not identity authority  
+To prevent real-world attacks, I implemented:
 
-### Supported Providers
-- Google  
-- GitHub  
+- Redis-backed token bucket rate limiting  
+- Brute-force login protection  
+- IP and CIDR-based throttling  
+- Admin-controlled rate limit rules  
+- Metrics tracking for suspicious behavior  
+
+This models how production systems **handle abuse instead of ignoring it**.
 
 ---
 
-## RBAC Model
+## Role-Based Access Control (RBAC)
 
-### Entities
+**Entities**
 - User  
 - Role  
 - Permission  
 
-### Relationships
-- User to Role is many-to-many  
-- Role to Permission is many-to-many  
+**Capabilities**
+- Many-to-many RBAC mapping  
+- Permission bootstrap automation  
+- Method-level enforcement using `@PreAuthorize`  
+- Admin APIs to manage roles and permissions  
 
-### Enforcement
-- Method-level security using `@PreAuthorize`  
-- No controller-level role hacks  
-- Permissions modeled as data  
-
-RBAC is extensible without code rewrites.
+RBAC is **data-driven, extensible, and designed for growth**.
 
 ---
 
-## Code Organization
+## Security Audit & Observability
 
-Structured by **domain**, not layers.
+I built a structured **security audit pipeline** that records:
 
-- `auth` – login, logout, credentials  
-- `oauth` – OAuth2 handling  
-- `security` – filters and configuration  
-- `token` – refresh token lifecycle  
-- `user` – users, roles, permissions  
-- `audit` – authentication audit logging  
+- Login successes and failures  
+- OAuth authentication attempts  
+- Token refresh and logout events  
+- Authorization decisions  
+- Failure reasons and severity classification  
+- User ID, provider, IP address, User-Agent, and timestamps  
 
-This structure scales. Flat packages do not.
+This includes:
+- An audit state machine  
+- Failure severity scoring  
+- Invariant validation  
 
----
-
-## Testing and Documentation Status
-
-- API documentation pending  
-- Integration tests pending  
-
-This project prioritized **correct security behavior first**.  
-Surface area will be documented after stabilization.
-
-No fake coverage badges.
+Audit logs here act as **security evidence**, not debug logs.
 
 ---
 
-## Engineering Mindset
+## Spring Boot Skills I Demonstrate Here
 
-Built with a QA-driven backend mindset:
-- Edge cases modeled explicitly  
-- Failure paths treated as first-class  
-- Security violations handled deliberately  
-- Defensive coding around authentication boundaries  
+- Custom Spring Security filter chains  
+- OAuth2 Authorization Code Flow  
+- JWT authentication and validation  
+- Redis integration for rate limiting  
+- Transactional domain services  
+- Event-driven architecture  
+- Structured exception handling  
+- Async workflows and audit pipelines  
+- Clean layered Spring Boot configuration  
 
-Security is behavior. Not annotations.
-
----
-
-## How This Project Should Be Evaluated
-
-### For Large Companies
-- Demonstrates understanding of IAM internals  
-- Shows token lifecycle reasoning  
-- Shows security-first architecture  
-
-### For Startups
-- Ready to be extracted as an auth service  
-- Clear extension points  
-- No unnecessary infrastructure dependencies  
-
-If you want shortcuts, this repository is not for you.
+This project reflects **real backend engineering, not tutorial-level Spring Boot**.
 
 ---
 
-## Roadmap
+## How My QA Background Strengthens My Backend Work
 
-- Dockerization  
-- OpenAPI documentation  
-- Integration test coverage  
-- Redis-backed refresh token optimization  
-- CI pipeline  
+My QA experience influences how I build systems:
+
+- I think in edge cases first  
+- I design for negative paths before happy paths  
+- I validate inputs aggressively  
+- I expect misuse and abuse  
+- I design features that are testable and deterministic  
+- I aim for systems that **fail safely instead of failing silently**  
+
+This helps me build **reliable, predictable backend services**.
 
 ---
 
-## Final Statement
+## Running the Project
 
-This project reflects how IAM systems are **designed**, not how tutorials are written.
+### Requirements
+- Java 21  
+- Maven  
+- PostgreSQL  
+- Redis  
 
-If you review this code carefully, you will see intent, tradeoffs, and discipline.
+### Setup
+```bash
+git clone https://github.com/Jaypal07/Scalable-Identity-Access-Management-IAM-Service
+cd Scalable-Identity-Access-Management-IAM-Service
+mvn clean install
+```
 
-That is the signal.
+### Configure
+Edit:
+- `application-dev.yml`
+- `.env` (Database, Redis, OAuth credentials)
 
+### Run
+```bash
+mvn spring-boot:run
+```
+
+---
+
+## Why I Think This Project Matters
+
+This repository shows that I:
+
+- Build systems with a **fail-fast mindset**  
+- Understand **Spring Boot at a real production level**  
+- Apply **QA discipline to backend correctness**  
+- Think deeply about **security, tokens, and identity flows**  
+- Am ready to **transition from QA to Java backend engineering**  
+
+This is not a demo.  
+This is me proving **I can build real backend systems**.
+
+---
+
+## Author
+
+**Jaypal**  
+QA → Java Backend Engineer  
+Spring Boot | Security | Distributed Systems | Fail-Fast Engineering  
+
+GitHub: https://github.com/Jaypal07  
+Linkedin: [jaypal-koli](https://www.linkedin.com/in/jaypal-koli/)
