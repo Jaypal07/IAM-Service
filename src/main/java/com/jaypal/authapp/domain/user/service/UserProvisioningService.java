@@ -5,6 +5,7 @@ import com.jaypal.authapp.domain.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
@@ -20,7 +21,7 @@ public class UserProvisioningService {
      * Apply default IAM rules to a newly created user.
      * Idempotent and safe for retries.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void provisionNewUser(User user) {
         Objects.requireNonNull(user, "User cannot be null");
 

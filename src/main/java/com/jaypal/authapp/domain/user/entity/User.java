@@ -142,11 +142,9 @@ public class User {
             throw new IllegalArgumentException("Name cannot be blank");
         }
 
-        final UUID id = UUID.randomUUID();
         final Instant now = Instant.now();
 
         return User.builder()
-                .id(id)
                 .email(email.toLowerCase().trim())
                 .name(name.trim())
                 .image(image)
@@ -231,12 +229,12 @@ public class User {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof User user)) return false;
-        return Objects.equals(id, user.id);
+        if (!(o instanceof User other)) return false;
+        return id != null && id.equals(other.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id);
+        return Objects.hashCode(id);
     }
 }
