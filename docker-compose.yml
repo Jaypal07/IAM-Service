@@ -2,36 +2,10 @@ version: "3.9"
 
 services:
   auth-api:
-    build: .
+    image: jaypalkoli/iam-service-backend:v1.2.0
     container_name: iam-service
     env_file:
-      - .env
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SERVER_PORT: 8081
+      - .env-dev
     ports:
       - "8081:8081"
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
-
-  postgres:
-    image: postgres:17
-    container_name: iam-postgres
-    environment:
-      POSTGRES_DB: IAM-App
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1234
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  pgdata:

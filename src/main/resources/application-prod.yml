@@ -16,14 +16,14 @@ spring:
   # DATABASE
   # ===============================
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: HikariCP
-      maximum-pool-size: ${DB_MAX_POOL_SIZE:5}
-      minimum-idle: ${DB_MIN_IDLE:2}
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:5}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:2}
       connection-timeout: 10000
       idle-timeout: 600000
       max-lifetime: 1800000
@@ -37,24 +37,25 @@ spring:
   # ===============================
   jpa:
     open-in-view: false
-    show-sql: false
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
     properties:
       hibernate:
         default_schema: public
+        format_sql: ${SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL:false}
 
   # ===============================
   # REDIS (PROD – SSL ENABLED)
   # ===============================
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      username: ${REDIS_USERNAME:default}
-      password: ${REDIS_PASSWORD}
+      host: ${SPRING_REDIS_HOST}
+      port: ${SPRING_REDIS_PORT}
+      username: ${SPRING_REDIS_USERNAME:default}
+      password: ${SPRING_REDIS_PASSWORD}
       ssl:
-        enabled: false
+        enabled: ${SPRING_REDIS_SSL_ENABLED:true}
       timeout: 5s
       lettuce:
         pool:
@@ -105,8 +106,8 @@ spring:
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     properties:
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
 
   # ===============================
   # CACHE
@@ -137,12 +138,12 @@ security:
   jwt:
     secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER}
-    access-ttl-seconds: 900
-    refresh-ttl-seconds: 86400
-    refresh-token-cookie-name: refreshToken
-    cookie-secure: true
-    cookie-http-only: true
-    cookie-same-site: Strict
+    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:900}
+    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:86400}
+    refresh-token-cookie-name: ${JWT_REFRESH_COOKIE_NAME:refreshToken}
+    cookie-secure: ${JWT_COOKIE_SECURE:true}
+    cookie-http-only: ${JWT_COOKIE_HTTP_ONLY:true}
+    cookie-same-site: ${JWT_COOKIE_SAME_SITE:Strict}
     cookie-domain: ${JWT_COOKIE_DOMAIN}
 
 # ===============================
@@ -151,7 +152,7 @@ security:
 logging:
   level:
     root: INFO
-    org.springframework.security: WARN
+    org.springframework.security: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY:WARN}
     org.springframework.data.redis: INFO
     com.jaypal.authapp: INFO
 
