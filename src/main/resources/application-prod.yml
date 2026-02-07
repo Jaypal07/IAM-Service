@@ -22,7 +22,7 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: HikariCP
-      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:5}
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:20}
       minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:2}
       connection-timeout: 10000
       idle-timeout: 600000
@@ -166,7 +166,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info
 
 # ===============================
 # SPRINGDOC / SWAGGER (PRODUCTION)
@@ -176,9 +176,9 @@ management:
 springdoc:
   api-docs:
     path: /api-docs
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
   swagger-ui:
     path: /swagger-ui.html
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: ${SWAGGER_ENABLED:false}
     operations-sorter: method
     tags-sorter: alpha
