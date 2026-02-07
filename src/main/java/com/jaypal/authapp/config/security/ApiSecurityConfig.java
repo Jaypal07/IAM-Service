@@ -22,16 +22,14 @@ public class ApiSecurityConfig {
         private final JwtAuthenticationFilter jwtAuthenticationFilter;
         private final SecurityAuthenticationEntryPoint authenticationEntryPoint;
         private final AuditAccessDeniedHandler auditAccessDeniedHandler;
-
-        @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
-        private String frontendUrl;
+        private final org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource;
 
         @Bean
         public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
                 http
                                 .securityMatcher("/api/**")
                                 .csrf(AbstractHttpConfigurer::disable)
-                                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers("/api/v1/auth/**").permitAll()
@@ -45,42 +43,5 @@ public class ApiSecurityConfig {
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
                 return http.build();
-        }
-
-        @Bean
-        public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
-                org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
-
-                // Allow specific frontend origin
-                configuration.setAllowedOrigins(java.util.List.of(frontendUrl, "http://localhost:3000"));
-
-                // Allow common methods
-                configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-
-                // Allow Authorization and other headers
-                configuration.setAllowedHeaders(java.util.List.of(
-                                "Authorization",
-                                "Content-Type",
-                                "X-Forwarded-For",
-                                "X-Requested-With",
-                                "Accept",
-                                "Origin",
-                                "Access-Control-Request-Method",
-                                "Access-Control-Request-Headers"));
-
-                // Expose headers if needed (e.g. for pagination or tokens)
-                configuration.setExposedHeaders(java.util.List.of(
-                                "Authorization",
-                                "Set-Cookie"));
-
-                // Allow credentials (cookies)
-                configuration.setAllowCredentials(true);
-
-                // Cache preflight requests for 1 hour
-                configuration.setMaxAge(3600L);
-
-                org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
-                source.registerCorsConfiguration("/**", configuration);
-                return source;
         }
 }
