@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework
   shutdown: graceful
   error:
@@ -172,3 +172,20 @@ management:
   health:
     redis:
       enabled: true
+
+# ===============================
+# SPRINGDOC / SWAGGER
+# ===============================
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+    show-extensions: true
+    show-common-extensions: true
+    try-it-out-enabled: true

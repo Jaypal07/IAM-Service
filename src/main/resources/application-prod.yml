@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework
   shutdown: graceful
   error:
@@ -167,3 +167,18 @@ management:
     web:
       exposure:
         include: health,info,metrics
+
+# ===============================
+# SPRINGDOC / SWAGGER (PRODUCTION)
+# ===============================
+# Disabled by default in production for security
+# Enable via SWAGGER_ENABLED=true env var if needed
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:true}
+    operations-sorter: method
+    tags-sorter: alpha
