@@ -1,14 +1,16 @@
 package com.jaypal.authapp.service.oauth.operations;
 
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.jaypal.authapp.domain.user.entity.Provider;
 import com.jaypal.authapp.domain.user.entity.User;
 import com.jaypal.authapp.domain.user.repository.UserRepository;
 import com.jaypal.authapp.domain.user.service.UserProvisioningService;
 import com.jaypal.authapp.infrastructure.oauth.model.ValidatedOAuthUserInfo;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Resolves OAuth user in an atomic way.
@@ -25,6 +27,7 @@ public class OAuthUserResolver {
     public User resolveOrCreate(Provider provider, ValidatedOAuthUserInfo info) {
 
         return userRepository.findByProviderAndProviderId(provider, info.providerId())
+                .or(() -> userRepository.findByEmail(info.email()))
                 .orElseGet(() -> create(provider, info));
     }
 
