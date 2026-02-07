@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.jaypal</groupId>
-    <artifactId>Auth-App-Backend</artifactId>
+    <artifactId>IAM-Service-Backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>Auth-App-Backend</name>
-    <description>Authentication app using spring boot and reactjs</description>
+    <name>IAM-Service-Backend</name>
+    <description>IAM Service using spring boot and reactjs</description>
     <url/>
     <licenses>
         <license/>
