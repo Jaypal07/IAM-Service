@@ -1,6 +1,8 @@
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework
+  # Base URL for OAuth2 redirect URIs (must include port)
+  base-url: ${SERVER_BASE_URL:http://localhost:8080}
   shutdown: graceful
   error:
     include-message: never
@@ -83,10 +85,12 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: openid,profile,email
+            redirect-uri: "{baseUrl}/login/oauth2/code/google"
           github:
             client-id: ${GITHUB_CLIENT_ID}
             client-secret: ${GITHUB_CLIENT_SECRET}
             scope: user:email,read:user
+            redirect-uri: "{baseUrl}/login/oauth2/code/github"
 
   # ===============================
   # MAIL
@@ -137,10 +141,10 @@ security:
     access-ttl-seconds: 900
     refresh-ttl-seconds: 86400
     refresh-token-cookie-name: refreshToken
-    cookie-secure: false
+    cookie-secure: ${JWT_COOKIE_SECURE:false}
     cookie-http-only: true
-    cookie-same-site: Lax
-    cookie-domain: localhost
+    cookie-same-site: ${JWT_COOKIE_SAME_SITE:None}
+    cookie-domain: ${JWT_COOKIE_DOMAIN:}
 
 # ===============================
 # RATE LIMITING (DEV)

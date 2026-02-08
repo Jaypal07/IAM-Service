@@ -1,6 +1,8 @@
 server:
   port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework
+  # Base URL for OAuth2 redirect URIs (must include port)
+  base-url: ${SERVER_BASE_URL:http://3.110.155.78.nip.io:8080}
   shutdown: graceful
   error:
     include-message: never
@@ -66,6 +68,24 @@ spring:
           max-wait: 200ms
 
 
+  # ===============================
+  # OAUTH2
+  # ===============================
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: openid,profile,email
+            redirect-uri: "{baseUrl}/login/oauth2/code/google"
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope: user:email,read:user
+            redirect-uri: "{baseUrl}/login/oauth2/code/github"
+
   rate-limit:
     endpoints:
       default:
@@ -129,8 +149,8 @@ security:
     refresh-token-cookie-name: ${JWT_REFRESH_COOKIE_NAME:refreshToken}
     cookie-secure: ${JWT_COOKIE_SECURE:true}
     cookie-http-only: ${JWT_COOKIE_HTTP_ONLY:true}
-    cookie-same-site: ${JWT_COOKIE_SAME_SITE:Strict}
-    cookie-domain: ${JWT_COOKIE_DOMAIN}
+    cookie-same-site: ${JWT_COOKIE_SAME_SITE:None}
+    cookie-domain: ${JWT_COOKIE_DOMAIN:}
 
 # ===============================
 # LOGGING

@@ -51,6 +51,18 @@ public class CookieService {
 
     public void attachRefreshCookie(HttpServletResponse response, String token, int maxAge) {
         ResponseCookie cookie = build(token, maxAge);
+        
+        log.info(
+            "Setting refresh cookie | name={} domain={} secure={} sameSite={} httpOnly={} maxAge={} path={}",
+            refreshTokenCookieName,
+            domain != null && !domain.isBlank() ? domain : "\u003cbrowser-default\u003e",
+            secure,
+            sameSite,
+            httpOnly,
+            maxAge,
+            PATH
+        );
+        
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         addNoStoreHeader(response);
     }

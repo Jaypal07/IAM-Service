@@ -20,18 +20,32 @@ public class CookieTokenExtractor {
 
     public Optional<String> extract(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
-
+        
         if (cookies == null) {
-            log.debug("No cookies present in request");
+            log.warn("No cookies present in request | uri={} origin={}", 
+                request.getRequestURI(), 
+                request.getHeader("Origin"));
             return Optional.empty();
         }
-
-        return Arrays.stream(cookies)
+        
+        log.debug("Cookies received | count={} names={}", 
+            cookies.length,
+            Arrays.stream(cookies).map(Cookie::getName).collect(java.util.stream.Collectors.joining(", ")));
+        
+        Optional<String> result = Arrays.stream(cookies)
                 .filter(Objects::nonNull)
                 .filter(c -> cookieService.getRefreshTokenCookieName().equals(c.getName()))
                 .map(Cookie::getValue)
                 .filter(this::isValid)
                 .findFirst();
+        
+        if (result.isEmpty()) {
+            log.warn("Refresh token cookie not found | expected={} available={}", 
+                cookieService.getRefreshTokenCookieName(),
+                Arrays.stream(cookies).map(Cookie::getName).collect(java.util.stream.Collectors.joining(", ")));
+        }
+        
+        return result;
     }
 
     private boolean isValid(String value) {
