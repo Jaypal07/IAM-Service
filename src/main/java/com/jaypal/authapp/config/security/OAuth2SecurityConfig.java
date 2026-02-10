@@ -1,7 +1,5 @@
 package com.jaypal.authapp.config.security;
 
-import com.jaypal.authapp.config.security.entrypoint.OAuth2AuthenticationEntryPoint;
-import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +10,10 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+
+import com.jaypal.authapp.config.security.entrypoint.OAuth2AuthenticationEntryPoint;
+
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @RequiredArgsConstructor
@@ -31,7 +33,7 @@ public class OAuth2SecurityConfig {
                                 "/login/oauth2/code/**")
                         .csrf(AbstractHttpConfigurer::disable)
                         .cors(Customizer.withDefaults())
-                        .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                        .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                         .oauth2Login(oauth -> oauth
                         .successHandler(successHandler)
                         .failureHandler(failureHandler))
